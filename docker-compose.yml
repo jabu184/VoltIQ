@@ -1,0 +1,27 @@
+services:
+  voltiq-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voltiq-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-}
+      - TESLA_CLIENT_SECRET=${TESLA_CLIENT_SECRET:-}
+      - TESLA_REDIRECT_URI=${TESLA_REDIRECT_URI:-http://localhost:3001/api/auth/callback}
+      - TESLA_AUDIENCE=${TESLA_AUDIENCE:-https://fleet-api.prd.na.vn.cloud.tesla.com}
+    volumes:
+      - voltiq-data:/app/server
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  voltiq-data:
+    driver: local

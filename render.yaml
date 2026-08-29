@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: voltiq-backend
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npx tsx server/server.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: TESLA_CLIENT_ID
+        sync: false
+      - key: TESLA_CLIENT_SECRET
+        sync: false
+      - key: TESLA_REDIRECT_URI
+        sync: false
+      - key: TESLA_AUDIENCE
+        value: https://fleet-api.prd.na.vn.cloud.tesla.com
+    disk:
+      name: voltiq-data
+      mountPath: /app/server
+      sizeGB: 1
