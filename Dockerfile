@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json tsconfig.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies and global tsx
+RUN npm ci && npm install -g tsx
 
 # Copy server and source code
 COPY server/ ./server/
@@ -21,4 +21,4 @@ ENV NODE_ENV=production
 ENV PORT=3001
 
 # Start the VoltIQ production server
-CMD ["npx", "tsx", "server/server.ts"]
+CMD ["tsx", "server/server.ts"]
