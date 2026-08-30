@@ -248,13 +248,13 @@ export const DashboardScreen: React.FC = () => {
         <View style={styles.headerBadgesRow}>
           <View style={[styles.badgeBYOK, hasToken ? styles.badgeLive : (serverOnline ? styles.badgeServer : styles.badgeDemo)]}>
             <Text style={[styles.badgeText, hasToken ? styles.badgeTextLive : (serverOnline ? styles.badgeTextServer : styles.badgeTextDemo)]}>
-              {hasToken ? '● Tesla Linked' : (serverOnline ? '● Server Active' : '○ Standby')}
+              {hasToken ? '● PAIRED' : (serverOnline ? '● SERVER ACTIVE' : '○ UNPAIRED')}
             </Text>
           </View>
           {hasToken && (
             <View style={[styles.badgeStatus, isCarOnline ? styles.badgeOnline : styles.badgeOffline]}>
               <Text style={[styles.badgeText, isCarOnline ? styles.badgeTextOnline : styles.badgeTextOffline]}>
-                {isCarOnline ? '● Online' : (telemetry?.vehicleState === 'asleep' ? '○ Asleep' : '○ Offline')}
+                {isCarOnline ? '● CONNECTED' : '○ OFFLINE'}
               </Text>
             </View>
           )}
