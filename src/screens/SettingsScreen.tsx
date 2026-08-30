@@ -150,7 +150,7 @@ export const SettingsScreen: React.FC = () => {
       );
     } else {
       showAlert(
-        'Server Unreachable âšª',
+        'Server Unreachable ⚪',
         `Could not connect to ${serverUrlInput}. Ensure backend is running.`
       );
     }
@@ -284,7 +284,7 @@ export const SettingsScreen: React.FC = () => {
               {selectedProfile.nominalCapacityKwh} kWh &bull; ~{selectedProfile.whPerMile} Wh/mi
             </Text>
           </View>
-          <Text style={styles.dropdownArrow}>â–¼</Text>
+          <Text style={styles.dropdownArrow}>▼</Text>
         </TouchableOpacity>
 
         <View style={styles.packDivider} />
@@ -394,7 +394,7 @@ export const SettingsScreen: React.FC = () => {
                         {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
                       </Text>
                     </View>
-                    {isSelected && <Text style={styles.dropdownCheck}>âœ“</Text>}
+                    {isSelected && <Text style={styles.dropdownCheck}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}
@@ -464,7 +464,7 @@ export const SettingsScreen: React.FC = () => {
             onPress={() => setCurrency('EUR')}
           >
             <Text style={[styles.currencyBtnText, currency === 'EUR' && styles.currencyBtnTextActive]}>
-              Euros (â‚¬)
+              Euros (€)
             </Text>
           </TouchableOpacity>
         </View>
@@ -575,7 +575,7 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.label}>Connection Status</Text>
           <View style={[styles.statusBadge, hasSavedToken ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {hasSavedToken ? 'â— PAIRED' : '○ UNPAIRED'}
+              {hasSavedToken ? '● PAIRED' : '○ UNPAIRED'}
             </Text>
           </View>
         </View>
@@ -595,7 +595,7 @@ export const SettingsScreen: React.FC = () => {
             </View>
 
             <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusDot}>â—</Text>
+              <Text style={styles.syncStatusDot}>●</Text>
               <Text style={styles.syncStatusText}>24/7 Sleep-Safe Fleet Sync Active</Text>
             </View>
 
@@ -610,7 +610,7 @@ export const SettingsScreen: React.FC = () => {
               style={styles.teslaLoginBtn}
               onPress={() => setShowLoginModal(true)}
             >
-              <Text style={styles.teslaLoginBtnText}>âš¡ Sign In with Tesla Account</Text>
+              <Text style={styles.teslaLoginBtnText}>⚡ Sign In with Tesla Account</Text>
             </TouchableOpacity>
 
             <View style={styles.orRow}>
@@ -682,7 +682,7 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.label}>Server Status</Text>
           <View style={[styles.statusBadge, serverHealth ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {serverHealth ? `â— CONNECTED (${serverHealth.snapshotCount} SNAPSHOTS)` : '○ OFFLINE (LOCAL FALLBACK)'}
+              {serverHealth ? `● CONNECTED (${serverHealth.snapshotCount} SNAPSHOTS)` : '○ OFFLINE (LOCAL FALLBACK)'}
             </Text>
           </View>
         </View>

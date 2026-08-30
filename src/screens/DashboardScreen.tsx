@@ -181,7 +181,7 @@ export const DashboardScreen: React.FC = () => {
     if (serverOnline) {
       const res = await triggerServerSync();
       showAlert(
-        res.success ? 'Vehicle Link Connected! âš¡' : 'Tesla Fleet API Response',
+        res.success ? 'Vehicle Link Connected! ⚡' : 'Tesla Fleet API Response',
         res.message
       );
     } else {
@@ -264,7 +264,7 @@ export const DashboardScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.loginBannerBtn}>
-            <Text style={styles.loginBannerBtnText}>Connect âš¡</Text>
+            <Text style={styles.loginBannerBtnText}>Connect ⚡</Text>
           </View>
         </TouchableOpacity>
       )}
@@ -380,7 +380,7 @@ export const DashboardScreen: React.FC = () => {
           style={styles.quickEntryButton}
           onPress={() => setShowLoginModal(true)}
         >
-          <Text style={styles.quickEntryButtonText}>ðŸ“ Log Current Car Reading (SoC & Range)</Text>
+          <Text style={styles.quickEntryButtonText}>📋 Log Current Car Reading (SoC & Range)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -436,7 +436,7 @@ export const DashboardScreen: React.FC = () => {
 
         <Text style={styles.statusFooterHint}>
           {isCarOnline
-            ? 'âœ“ Live two-way connection established with the vehicle.'
+            ? '✓ Live two-way connection established with the vehicle.'
             : 'Tesla enters low-power deep sleep to conserve battery. Telemetry reflects the last recorded snapshot.'}
         </Text>
       </View>

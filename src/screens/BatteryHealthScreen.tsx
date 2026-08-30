@@ -294,7 +294,7 @@ export const BatteryHealthScreen: React.FC = () => {
       <Modal visible={showPaywall} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalBadge}>âš¡ ONE-OFF LIFETIME UNLOCK</Text>
+            <Text style={styles.modalBadge}>⚡ ONE-OFF LIFETIME UNLOCK</Text>
             <Text style={styles.modalTitle}>TrueBattery Premium</Text>
             <Text style={styles.modalSubtitle}>
               One payment of {priceLabel}. No monthly subscriptions.
@@ -302,19 +302,19 @@ export const BatteryHealthScreen: React.FC = () => {
 
             <View style={styles.featureList}>
               <View style={styles.featureItem}>
-                <Text style={styles.featureCheck}>âœ“</Text>
+                <Text style={styles.featureCheck}>✓</Text>
                 <Text style={styles.featureText}>Full historical degradation curves & trend graphs</Text>
               </View>
               <View style={styles.featureItem}>
-                <Text style={styles.featureCheck}>âœ“</Text>
+                <Text style={styles.featureCheck}>✓</Text>
                 <Text style={styles.featureText}>Unlimited AutoTrader & eBay Resale PDF Certificates</Text>
               </View>
               <View style={styles.featureItem}>
-                <Text style={styles.featureCheck}>âœ“</Text>
+                <Text style={styles.featureCheck}>✓</Text>
                 <Text style={styles.featureText}>Detailed Cell Balance & AC vs DC wear diagnostics</Text>
               </View>
               <View style={styles.featureItem}>
-                <Text style={styles.featureCheck}>âœ“</Text>
+                <Text style={styles.featureCheck}>✓</Text>
                 <Text style={styles.featureText}>100% Local-first: Zero subscriptions, zero server tracking</Text>
               </View>
             </View>

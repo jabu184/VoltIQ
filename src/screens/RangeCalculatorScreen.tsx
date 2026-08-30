@@ -183,9 +183,6 @@ export const RangeCalculatorScreen: React.FC = () => {
       <View style={styles.contextCard}>
         <View style={styles.contextHeaderRow}>
           <Text style={styles.contextCarName}>{carName}</Text>
-          <View style={styles.liveTag}>
-            <Text style={styles.liveTagText}>â— LATEST TELEMETRY</Text>
-          </View>
         </View>
         <View style={styles.contextStatsRow}>
           <View style={styles.contextStat}>
@@ -294,9 +291,9 @@ export const RangeCalculatorScreen: React.FC = () => {
           >
             <Text style={styles.statusBannerText}>
               {isOver100
-                ? `âš ï¸ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
+                ? `⚠️ï¸ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
                 : hasEnough
-                ? `âœ“ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
+                ? `✓ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
                 : `🔌 Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
             </Text>
           </View>
@@ -364,7 +361,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Supercharger Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>âš¡</Text>
+                  <Text style={styles.columnIcon}>⚡</Text>
                   <View>
                     <Text style={styles.columnName}>Supercharger</Text>
                     <Text style={styles.columnSub}>{superchargerPowerKw} kW ({superchargerRate}{currencySubUnit}/kWh)</Text>
@@ -416,7 +413,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Supercharger Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>âš¡</Text>
+                  <Text style={styles.columnIcon}>⚡</Text>
                   <View>
                     <Text style={styles.columnName}>Supercharger</Text>
                     <Text style={styles.columnSub}>{superchargerPowerKw} kW ({superchargerRate}{currencySubUnit}/kWh)</Text>
