@@ -9,6 +9,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 
 interface ManualLogModalProps {
@@ -55,27 +56,33 @@ export const ManualLogModal: React.FC<ManualLogModalProps> = ({
     }
   }, [visible, initialSoc, initialRange, initialOdo]);
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const handleSave = async () => {
-    const socNum = parseFloat(socInput);
-    const rangeNum = parseFloat(rangeInput);
-    const odoNum = parseFloat(odoInput);
+    const cleanSoc = (socInput || '').replace(/,/g, '.').trim();
+    const cleanRange = (rangeInput || '').replace(/,/g, '').trim();
+    const cleanOdo = (odoInput || '').replace(/,/g, '').trim();
+
+    const socNum = parseFloat(cleanSoc);
+    const rangeNum = parseFloat(cleanRange);
+    const odoNum = parseFloat(cleanOdo);
 
     if (isNaN(socNum) || socNum < 1 || socNum > 100) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert('Please enter a valid battery percentage (1 - 100%).');
-      }
+      showAlert('Invalid Battery %', 'Please enter a valid battery percentage (1 - 100%).');
       return;
     }
     if (isNaN(rangeNum) || rangeNum <= 0) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert('Please enter a valid rated range.');
-      }
+      showAlert('Invalid Range', 'Please enter a valid rated range.');
       return;
     }
     if (isNaN(odoNum) || odoNum < 0) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert('Please enter a valid odometer reading.');
-      }
+      showAlert('Invalid Odometer', 'Please enter a valid odometer mileage.');
       return;
     }
 
@@ -90,6 +97,9 @@ export const ManualLogModal: React.FC<ManualLogModalProps> = ({
         odometer: actualOdoMiles,
       });
       onClose();
+      showAlert('Reading Saved! 💾', `Successfully logged ${socNum}% SoC and ${rangeNum} ${unitLabel} rated range.`);
+    } catch (err: any) {
+      showAlert('Save Error', err.message || 'Failed to save vehicle reading.');
     } finally {
       setSaving(false);
     }

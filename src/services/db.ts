@@ -121,8 +121,13 @@ export async function getSnapshots(limit: number = 100, vehicleId?: string): Pro
   let query = 'SELECT * FROM battery_snapshots';
   const params: any[] = [];
   if (vehicleId) {
-    query += ' WHERE vehicle_id = ? OR (vehicle_id IS NULL AND ? = \'default_car\')';
-    params.push(vehicleId, vehicleId);
+    const isDefault = vehicleId === 'veh_default' || vehicleId === 'default_car';
+    if (isDefault) {
+      query += " WHERE vehicle_id = 'veh_default' OR vehicle_id = 'default_car' OR vehicle_id IS NULL";
+    } else {
+      query += ' WHERE vehicle_id = ?';
+      params.push(vehicleId);
+    }
   }
   query += ' ORDER BY timestamp DESC LIMIT ?';
   params.push(limit);
