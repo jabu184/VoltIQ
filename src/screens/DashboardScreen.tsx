@@ -54,6 +54,7 @@ export const DashboardScreen: React.FC = () => {
   const [serverOnline, setServerOnline] = useState<boolean>(false);
   const [serverSnapshotCount, setServerSnapshotCount] = useState<number>(0);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [lastPolledAt, setLastPolledAt] = useState<number | null>(null);
 
   const loadData = useCallback(async (isSilent: boolean = false) => {
     if (!isSilent) {
@@ -82,8 +83,13 @@ export const DashboardScreen: React.FC = () => {
             const realRange = typeof veh.last_rated_range === 'number' && veh.last_rated_range > 0 ? veh.last_rated_range : (snap?.rated_range_miles || 234.4);
             const realOdo = typeof veh.last_odometer === 'number' && veh.last_odometer > 0 ? veh.last_odometer : (snap?.odometer_miles || 4771.1);
 
+            const actualDataTimestamp = veh.data_updated_at || snap?.timestamp || veh.updated_at || Date.now();
+            if (veh.last_polled_at) {
+              setLastPolledAt(veh.last_polled_at);
+            }
+
             setTelemetry({
-              timestamp: veh.updated_at || snap?.timestamp || Date.now(),
+              timestamp: actualDataTimestamp,
               odometerMiles: realOdo,
               batteryLevelPct: realSoc,
               usableBatteryLevelPct: realSoc - 1,
@@ -206,8 +212,8 @@ export const DashboardScreen: React.FC = () => {
       : null;
 
   const pullTimestamp = telemetry?.timestamp;
-  const formatLastPulled = (ts?: number) => {
-    if (!ts) return { date: '--', time: '--', full: 'No pull recorded' };
+  const formatTimestamp = (ts?: number | null) => {
+    if (!ts) return { date: '--', time: '--', full: 'No record available' };
     const d = new Date(ts);
     const dateStr = d.toLocaleDateString(undefined, {
       day: 'numeric',
@@ -225,7 +231,8 @@ export const DashboardScreen: React.FC = () => {
       full: `${dateStr} at ${timeStr}`,
     };
   };
-  const lastPulled = formatLastPulled(pullTimestamp);
+  const lastDataPulled = formatTimestamp(pullTimestamp);
+  const lastPolledFormatted = formatTimestamp(lastPolledAt);
   const isCarOnline = telemetry?.isOnline ?? (telemetry?.vehicleState === 'online');
 
   return (
@@ -430,14 +437,23 @@ export const DashboardScreen: React.FC = () => {
         <View style={styles.statusFooterDivider} />
 
         <View style={styles.statusFooterDetailRow}>
-          <Text style={styles.statusFooterDetailLabel}>Data Last Pulled from Car:</Text>
-          <Text style={styles.statusFooterDetailValue}>{lastPulled.full}</Text>
+          <Text style={styles.statusFooterDetailLabel}>Data Last Received from Car:</Text>
+          <Text style={styles.statusFooterDetailValue}>{lastDataPulled.full}</Text>
         </View>
+
+        {!isCarOnline && lastPolledAt ? (
+          <View style={[styles.statusFooterDetailRow, { marginTop: 4 }]}>
+            <Text style={styles.statusFooterDetailLabel}>Sleep-Safe Poller Check:</Text>
+            <Text style={[styles.statusFooterDetailValue, { color: '#64748b' }]}>
+              {lastPolledFormatted.time} (Car Sleeping)
+            </Text>
+          </View>
+        ) : null}
 
         <Text style={styles.statusFooterHint}>
           {isCarOnline
             ? '✓ Live two-way connection established with the vehicle.'
-            : 'Tesla enters low-power deep sleep to conserve battery. Telemetry reflects the last recorded snapshot.'}
+            : 'Tesla is currently resting in low-power deep sleep. Metrics above reflect the last verified telemetry data received from the car.'}
         </Text>
       </View>
 

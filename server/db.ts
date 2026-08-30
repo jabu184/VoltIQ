@@ -28,6 +28,8 @@ export interface VehicleRecord {
   inside_temp?: number;
   outside_temp?: number;
   is_locked?: number | boolean;
+  data_updated_at?: number;
+  last_polled_at?: number;
   updated_at: number;
 }
 
@@ -105,6 +107,8 @@ export function getDb(customPath?: string): DatabaseSync {
   try { db.exec('ALTER TABLE vehicles ADD COLUMN inside_temp REAL'); } catch {}
   try { db.exec('ALTER TABLE vehicles ADD COLUMN outside_temp REAL'); } catch {}
   try { db.exec('ALTER TABLE vehicles ADD COLUMN is_locked INTEGER DEFAULT 1'); } catch {}
+  try { db.exec('ALTER TABLE vehicles ADD COLUMN data_updated_at INTEGER'); } catch {}
+  try { db.exec('ALTER TABLE vehicles ADD COLUMN last_polled_at INTEGER'); } catch {}
 
   dbInstance = db;
   return dbInstance;
@@ -192,9 +196,21 @@ export function upsertVehicle(vehicle: Partial<VehicleRecord> & { vin: string })
     }
   }
 
+  // Look up existing vehicle record to preserve data_updated_at if not updating live metrics
+  const existing = db.prepare('SELECT * FROM vehicles WHERE vin = ?').get(vehicle.vin) as VehicleRecord | undefined;
+  
+  let dataUpdatedAt = vehicle.data_updated_at;
+  if (!dataUpdatedAt) {
+    if (vehicle.last_soc !== undefined && vehicle.last_soc !== null) {
+      dataUpdatedAt = now;
+    } else if (existing?.data_updated_at) {
+      dataUpdatedAt = existing.data_updated_at;
+    }
+  }
+
   db.prepare(`
-    INSERT INTO vehicles (vin, display_name, model, last_state, last_soc, last_rated_range, last_odometer, last_charging_state, inside_temp, outside_temp, is_locked, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO vehicles (vin, display_name, model, last_state, last_soc, last_rated_range, last_odometer, last_charging_state, inside_temp, outside_temp, is_locked, data_updated_at, last_polled_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(vin) DO UPDATE SET
       display_name = coalesce(excluded.display_name, vehicles.display_name),
       model = coalesce(excluded.model, vehicles.model),
@@ -206,6 +222,8 @@ export function upsertVehicle(vehicle: Partial<VehicleRecord> & { vin: string })
       inside_temp = coalesce(excluded.inside_temp, vehicles.inside_temp),
       outside_temp = coalesce(excluded.outside_temp, vehicles.outside_temp),
       is_locked = coalesce(excluded.is_locked, vehicles.is_locked),
+      data_updated_at = coalesce(excluded.data_updated_at, vehicles.data_updated_at),
+      last_polled_at = excluded.last_polled_at,
       updated_at = excluded.updated_at
   `).run(
     vehicle.vin,
@@ -219,6 +237,8 @@ export function upsertVehicle(vehicle: Partial<VehicleRecord> & { vin: string })
     vehicle.inside_temp !== undefined ? vehicle.inside_temp : null,
     vehicle.outside_temp !== undefined ? vehicle.outside_temp : null,
     vehicle.is_locked !== undefined ? (vehicle.is_locked ? 1 : 0) : null,
+    dataUpdatedAt ?? null,
+    vehicle.last_polled_at || now,
     now
   );
 }
@@ -232,7 +252,7 @@ export function getVehicle(vin?: string): VehicleRecord | null {
     veh = (db.prepare('SELECT * FROM vehicles ORDER BY updated_at DESC LIMIT 1').get() as unknown as VehicleRecord) || null;
   }
 
-  // If vehicle has 0 odometer or default stats, restore from the latest snapshot in database
+  // If vehicle has 0 odometer or default stats or missing data_updated_at, restore from the latest snapshot
   if (veh) {
     const latestSnap = db.prepare('SELECT * FROM battery_snapshots WHERE vin = ? ORDER BY timestamp DESC LIMIT 1').get(veh.vin) as ServerSnapshot | undefined;
     if (latestSnap) {
@@ -244,6 +264,9 @@ export function getVehicle(vin?: string): VehicleRecord | null {
       }
       if (!veh.last_odometer || veh.last_odometer === 0) {
         veh.last_odometer = latestSnap.odometer_miles;
+      }
+      if (!veh.data_updated_at) {
+        veh.data_updated_at = latestSnap.timestamp;
       }
     }
   }

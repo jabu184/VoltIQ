@@ -57,6 +57,7 @@ export class SmartPoller {
           vin: status.vin,
           display_name: status.displayName,
           last_state: status.state,
+          last_polled_at: Date.now(),
         });
         return {
           status: 'asleep',
@@ -122,6 +123,8 @@ export class SmartPoller {
         inside_temp: telemetry.insideTempC,
         outside_temp: telemetry.outsideTempC,
         is_locked: telemetry.isLocked !== undefined ? (telemetry.isLocked ? 1 : 0) : 1,
+        data_updated_at: telemetry.timestamp,
+        last_polled_at: Date.now(),
       });
 
       if (shouldLogSnapshot) {

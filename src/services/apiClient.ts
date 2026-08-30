@@ -51,6 +51,8 @@ export interface ServerVehicleResponse {
     inside_temp?: number;
     outside_temp?: number;
     is_locked?: boolean;
+    data_updated_at?: number;
+    last_polled_at?: number;
     updated_at?: number;
   };
   latestSnapshot: BatterySnapshot | null;

@@ -243,6 +243,8 @@ const server = http.createServer(async (req, res) => {
                   inside_temp: reading.insideTempC,
                   outside_temp: reading.outsideTempC,
                   is_locked: reading.isLocked !== undefined ? (reading.isLocked ? 1 : 0) : 1,
+                  data_updated_at: reading.timestamp,
+                  last_polled_at: Date.now(),
                 });
               }
             } else {
@@ -250,6 +252,7 @@ const server = http.createServer(async (req, res) => {
                 vin: status.vin,
                 display_name: status.displayName,
                 last_state: status.state,
+                last_polled_at: Date.now(),
               });
             }
             vehicle = getVehicle(status.vin);
