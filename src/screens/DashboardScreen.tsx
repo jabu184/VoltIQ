@@ -241,45 +241,28 @@ export const DashboardScreen: React.FC = () => {
     >
       {/* App Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.brandTitle}>Vehicle Telemetry</Text>
           <Text style={styles.brandSubtitle}>Real-time battery metrics & health</Text>
         </View>
-        <View style={[styles.badgeBYOK, hasToken ? styles.badgeLive : (serverOnline ? styles.badgeServer : styles.badgeDemo)]}>
-          <Text style={[styles.badgeText, hasToken ? styles.badgeTextLive : (serverOnline ? styles.badgeTextServer : styles.badgeTextDemo)]}>
-            {hasToken ? '● TESLA LIVE FLEET' : (serverOnline ? '● SERVER DB ACTIVE' : '○ STANDBY')}
-          </Text>
+        <View style={styles.headerBadgesRow}>
+          <View style={[styles.badgeBYOK, hasToken ? styles.badgeLive : (serverOnline ? styles.badgeServer : styles.badgeDemo)]}>
+            <Text style={[styles.badgeText, hasToken ? styles.badgeTextLive : (serverOnline ? styles.badgeTextServer : styles.badgeTextDemo)]}>
+              {hasToken ? '● Tesla Linked' : (serverOnline ? '● Server Active' : '○ Standby')}
+            </Text>
+          </View>
+          {hasToken && (
+            <View style={[styles.badgeStatus, isCarOnline ? styles.badgeOnline : styles.badgeOffline]}>
+              <Text style={[styles.badgeText, isCarOnline ? styles.badgeTextOnline : styles.badgeTextOffline]}>
+                {isCarOnline ? '● Online' : (telemetry?.vehicleState === 'asleep' ? '○ Asleep' : '○ Offline')}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
-
-
-      {/* Smart Poller Status Pill */}
-      {serverOnline && (
-        <View style={styles.pollerPill}>
-          <Text style={styles.pollerPillTitle}>⚡ Smart Post-Charge Poller Active</Text>
-          <Text style={styles.pollerPillSub}>
-            Only queries the Tesla API after charging completes to minimize data calls and prevent vehicle sleep drain.
-          </Text>
-        </View>
-      )}
-
-      {/* Account Linked vs Connect Banner */}
-      {hasToken ? (
-        <View style={styles.connectedCard}>
-          <View style={styles.connectedCardRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.connectedCardTitle}>✓ Tesla Account Connected</Text>
-              <Text style={styles.connectedCardSub}>
-                VIN: {telemetry?.vin || 'LRW3F7FS3SC594594'} &bull; Official Tesla Fleet API Live
-              </Text>
-            </View>
-            <View style={styles.connectedLiveBadge}>
-              <Text style={styles.connectedLiveBadgeText}>FLEET SYNC</Text>
-            </View>
-          </View>
-        </View>
-      ) : (
+      {/* Connect Banner if not linked */}
+      {!hasToken && (
         <TouchableOpacity
           style={styles.loginBanner}
           onPress={() => setShowLoginModal(true)}
@@ -287,7 +270,7 @@ export const DashboardScreen: React.FC = () => {
           <View style={styles.loginBannerLeft}>
             <Text style={styles.loginBannerTitle}>Connect Vehicle Telemetry</Text>
             <Text style={styles.loginBannerSub}>
-              Log a 10s reading from your car or connect your Tesla account.
+              Connect your Tesla account for real-time 24/7 telemetry.
             </Text>
           </View>
           <View style={styles.loginBannerBtn}>
@@ -517,37 +500,62 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 2,
   },
+  headerBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   badgeBYOK: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
+  },
+  badgeStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  badgeOnline: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10b981',
+  },
+  badgeOffline: {
+    backgroundColor: 'rgba(100, 116, 139, 0.15)',
+    borderColor: '#64748b',
   },
   badgeServer: {
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
     borderColor: '#38bdf8',
   },
   badgeLive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderColor: '#10b981',
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
   },
   badgeDemo: {
     backgroundColor: '#1e293b',
-    borderColor: '#38bdf8',
+    borderColor: '#64748b',
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   badgeTextServer: {
     color: '#38bdf8',
   },
   badgeTextLive: {
-    color: '#10b981',
+    color: '#38bdf8',
   },
   badgeTextDemo: {
-    color: '#38bdf8',
+    color: '#94a3b8',
+  },
+  badgeTextOnline: {
+    color: '#10b981',
+  },
+  badgeTextOffline: {
+    color: '#94a3b8',
   },
   toast: {
     backgroundColor: '#065f46',
