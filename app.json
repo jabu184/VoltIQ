@@ -23,6 +23,8 @@
       "versionCode": 1,
       "permissions": [
         "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
       "adaptiveIcon": {
@@ -55,6 +57,12 @@
       "eas": {
         "projectId": "a25e56b2-6ed5-493c-806f-492c799d0192"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a25e56b2-6ed5-493c-806f-492c799d0192"
     }
   }
 }

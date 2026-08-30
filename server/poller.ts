@@ -7,7 +7,7 @@ export class SmartPoller {
   private timer: any = null;
   private isRunning: boolean = false;
 
-  constructor(service: TeslaFleetService, intervalMinutes: number = 15) {
+  constructor(service: TeslaFleetService, intervalMinutes: number = 1) {
     this.service = service;
     this.intervalMs = intervalMinutes * 60 * 1000;
   }

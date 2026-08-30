@@ -214,11 +214,35 @@ const server = http.createServer(async (req, res) => {
         try {
           const status = await fleetService.checkVehicleStatus();
           if (status.vin) {
-            upsertVehicle({
-              vin: status.vin,
-              display_name: status.displayName,
-              last_state: status.state,
-            });
+            // If vehicle is actively online/awake, automatically pull live telemetry!
+            if (status.isOnline && status.state === 'online') {
+              const reading = await fleetService.fetchTelemetryIfOnline(
+                status.vehicleId || '0',
+                status.vin,
+                62.5,
+                221.9
+              );
+              if (reading) {
+                upsertVehicle({
+                  vin: status.vin,
+                  display_name: status.displayName,
+                  last_state: 'online',
+                  last_soc: reading.batteryLevelPct,
+                  last_rated_range: reading.ratedRangeMiles,
+                  last_odometer: reading.odometerMiles,
+                  last_charging_state: reading.chargingState,
+                  inside_temp: reading.insideTempC,
+                  outside_temp: reading.outsideTempC,
+                  is_locked: reading.isLocked !== undefined ? (reading.isLocked ? 1 : 0) : 1,
+                });
+              }
+            } else {
+              upsertVehicle({
+                vin: status.vin,
+                display_name: status.displayName,
+                last_state: status.state,
+              });
+            }
             vehicle = getVehicle(status.vin);
           }
         } catch (err: any) {

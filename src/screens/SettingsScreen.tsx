@@ -402,7 +402,7 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.label}>Connection Mode</Text>
           <View style={[styles.statusBadge, hasSavedToken ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {hasSavedToken ? '● LIVE TESLA BYOK' : '○ SIMULATED DEMO'}
+              {hasSavedToken ? '● LIVE TESLA BYOK' : '○ NOT CONNECTED'}
             </Text>
           </View>
         </View>

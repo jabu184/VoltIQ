@@ -75,6 +75,10 @@ export const RangeCalculatorScreen: React.FC = () => {
 
   useEffect(() => {
     loadLatestStats();
+    const timer = setInterval(() => {
+      loadLatestStats();
+    }, 60000);
+    return () => clearInterval(timer);
   }, [loadLatestStats]);
 
   // When unit changes, update default input sensibly if it was at previous default
@@ -429,10 +433,8 @@ export const RangeCalculatorScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Refresh Stats Button */}
-      <TouchableOpacity style={styles.refreshBtn} onPress={loadLatestStats}>
-        <Text style={styles.refreshBtnText}>🔄 Refresh Vehicle Stats</Text>
-      </TouchableOpacity>
+      {/* Bottom padding */}
+      <View style={{ height: 20 }} />
     </ScrollView>
   );
 };

@@ -247,7 +247,7 @@ export const DashboardScreen: React.FC = () => {
         </View>
         <View style={[styles.badgeBYOK, hasToken ? styles.badgeLive : (serverOnline ? styles.badgeServer : styles.badgeDemo)]}>
           <Text style={[styles.badgeText, hasToken ? styles.badgeTextLive : (serverOnline ? styles.badgeTextServer : styles.badgeTextDemo)]}>
-            {hasToken ? '● TESLA LIVE FLEET' : (serverOnline ? '● SERVER DB ACTIVE' : '○ SIMULATED DEMO')}
+            {hasToken ? '● TESLA LIVE FLEET' : (serverOnline ? '● SERVER DB ACTIVE' : '○ STANDBY')}
           </Text>
         </View>
       </View>
