@@ -8,7 +8,7 @@ import { VehicleProfileProvider } from '@/context/VehicleProfileContext';
 import { UnitProvider } from '@/context/UnitContext';
 import { TariffProvider } from '@/context/TariffContext';
 import { VoltIQLogo } from '@/components/VoltIQLogo';
-import { VersionPill } from '@/components/VersionModal';
+import { HeaderStatusBadges } from '@/components/HeaderStatusBadges';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -33,7 +33,7 @@ export default function RootLayout() {
           headerTintColor: '#ffffff',
           headerTitleAlign: 'center',
           headerTitle: () => <VoltIQLogo size="sm" showSubtitle={false} />,
-          headerRight: () => <VersionPill />,
+          headerRight: () => <HeaderStatusBadges />,
           tabBarStyle: {
             backgroundColor: '#0f172a',
             borderTopColor: '#1e293b',

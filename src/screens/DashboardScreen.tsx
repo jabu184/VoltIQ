@@ -38,6 +38,8 @@ import { TeslaLoginModal } from '../components/TeslaLoginModal';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
 import { VoltIQLogo } from '../components/VoltIQLogo';
 import { useUnit } from '../context/UnitContext';
+import { useTariff } from '../context/TariffContext';
+import { FooterVersion } from '../components/FooterVersion';
 
 export const DashboardScreen: React.FC = () => {
   const { selectedProfile } = useVehicleProfile();
@@ -245,20 +247,6 @@ export const DashboardScreen: React.FC = () => {
           <Text style={styles.brandTitle}>Vehicle Telemetry</Text>
           <Text style={styles.brandSubtitle}>Real-time battery metrics & health</Text>
         </View>
-        <View style={styles.headerBadgesRow}>
-          <View style={[styles.badgeBYOK, hasToken ? styles.badgeLive : (serverOnline ? styles.badgeServer : styles.badgeDemo)]}>
-            <Text style={[styles.badgeText, hasToken ? styles.badgeTextLive : (serverOnline ? styles.badgeTextServer : styles.badgeTextDemo)]}>
-              {hasToken ? '● PAIRED' : (serverOnline ? '● SERVER ACTIVE' : '○ UNPAIRED')}
-            </Text>
-          </View>
-          {hasToken && (
-            <View style={[styles.badgeStatus, isCarOnline ? styles.badgeOnline : styles.badgeOffline]}>
-              <Text style={[styles.badgeText, isCarOnline ? styles.badgeTextOnline : styles.badgeTextOffline]}>
-                {isCarOnline ? '● CONNECTED' : '○ OFFLINE'}
-              </Text>
-            </View>
-          )}
-        </View>
       </View>
 
       {/* Connect Banner if not linked */}
@@ -457,6 +445,9 @@ export const DashboardScreen: React.FC = () => {
         onClose={() => setShowLoginModal(false)}
         onSuccess={loadData}
       />
+
+      {/* Version footer */}
+      <FooterVersion />
     </ScrollView>
   );
 };

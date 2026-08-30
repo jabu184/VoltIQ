@@ -23,6 +23,7 @@ import { fetchVehicleTelemetry, TeslaTelemetry } from '../services/teslaClient';
 import { generateAndShareCertificate } from '../services/pdfGenerator';
 import { checkServerHealth, fetchServerSnapshots, fetchServerVehicle } from '../services/apiClient';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
+import { FooterVersion } from '../components/FooterVersion';
 
 export const BatteryHealthScreen: React.FC = () => {
   const { isPremium, unlockLifetimePremium, restorePurchases, priceLabel } = usePremium();
@@ -339,6 +340,9 @@ export const BatteryHealthScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Version Footer */}
+      <FooterVersion />
     </ScrollView>
   );
 };

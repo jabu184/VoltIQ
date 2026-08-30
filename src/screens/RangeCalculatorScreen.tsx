@@ -15,6 +15,7 @@ import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
 import { getSnapshots } from '../services/db';
 import { RangeSlider } from '../components/RangeSlider';
+import { FooterVersion } from '../components/FooterVersion';
 
 export const RangeCalculatorScreen: React.FC = () => {
   const { selectedProfile } = useVehicleProfile();
@@ -433,8 +434,8 @@ export const RangeCalculatorScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Bottom padding */}
-      <View style={{ height: 20 }} />
+      {/* Version Footer */}
+      <FooterVersion />
     </ScrollView>
   );
 };

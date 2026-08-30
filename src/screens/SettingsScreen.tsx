@@ -10,6 +10,7 @@ import {
   Switch,
   RefreshControl,
   Platform,
+  Modal,
 } from 'react-native';
 import {
   getTeslaRefreshToken,
@@ -20,6 +21,7 @@ import { TESLA_PROFILES, VehicleModelProfile } from '../services/batteryLogic';
 import { usePremium } from '../context/PremiumContext';
 import { clearSnapshots, seedSampleData, getSnapshots } from '../services/db';
 import { TeslaLoginModal } from '../components/TeslaLoginModal';
+import { FooterVersion } from '../components/FooterVersion';
 import {
   getServerUrl,
   setServerUrl,
@@ -71,8 +73,19 @@ export const SettingsScreen: React.FC = () => {
     setScKwInput(String(superchargerPowerKw));
   }, [superchargerPowerKw]);
 
-  const { selectedProfile, setSelectedProfile } = useVehicleProfile();
+  const { selectedProfile, setSelectedProfile, selectProfileById, updateCustomProfile } = useVehicleProfile();
   const selectedProfileIndex = Math.max(0, TESLA_PROFILES.findIndex((p) => p.id === selectedProfile.id));
+  const [showModelDropdown, setShowModelDropdown] = useState<boolean>(false);
+  const [customNameInput, setCustomNameInput] = useState<string>(selectedProfile.name);
+  const [customCapacityInput, setCustomCapacityInput] = useState<string>(String(selectedProfile.nominalCapacityKwh));
+  const [customWhMiInput, setCustomWhMiInput] = useState<string>(String(selectedProfile.whPerMile));
+
+  useEffect(() => {
+    setCustomNameInput(selectedProfile.name);
+    setCustomCapacityInput(String(selectedProfile.nominalCapacityKwh));
+    setCustomWhMiInput(String(selectedProfile.whPerMile));
+  }, [selectedProfile]);
+
   const [tokenInput, setTokenInput] = useState<string>('');
   const [hasSavedToken, setHasSavedToken] = useState<boolean>(false);
   const [connectedVehicleName, setConnectedVehicleName] = useState<string>('');
@@ -247,41 +260,150 @@ export const SettingsScreen: React.FC = () => {
         <Text style={styles.screenSubtitle}>BYOK credentials, pack profile, and local storage</Text>
       </View>
 
-      {/* Vehicle Profile Selection */}
+      {/* Vehicle Profile Selection & Custom Pack */}
       <Text style={styles.sectionHeader}>Vehicle & Battery Pack</Text>
       <View style={styles.card}>
-        <Text style={styles.label}>Select Your Tesla Model</Text>
-        <View style={styles.profileList}>
-          {TESLA_PROFILES.map((p, idx) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[
-                styles.profileItem,
-                selectedProfileIndex === idx && styles.profileItemSelected,
-              ]}
-              onPress={async () => {
-                await setSelectedProfile(p);
-                Alert.alert(
-                  'Vehicle Profile Updated! ⚡',
-                  `Active pack set to ${p.name} (${p.nominalCapacityKwh} kWh nominal).\n\nBattery health, usable capacity, and degradation will now compute against this pack!`
-                );
+        <Text style={styles.label}>Tesla Model Preset</Text>
+        <Text style={styles.subText}>
+          Choose a preset model from the dropdown to auto-fill specs.
+        </Text>
+
+        {/* Dropdown Selector Button */}
+        <TouchableOpacity
+          style={styles.dropdownBtn}
+          onPress={() => setShowModelDropdown(true)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.dropdownSelectedText}>{selectedProfile.name}</Text>
+            <Text style={styles.dropdownSubText}>
+              {selectedProfile.nominalCapacityKwh} kWh &bull; ~{selectedProfile.whPerMile} Wh/mi
+            </Text>
+          </View>
+          <Text style={styles.dropdownArrow}>▼</Text>
+        </TouchableOpacity>
+
+        <View style={styles.packDivider} />
+
+        <Text style={[styles.label, { marginTop: 8 }]}>Adjust Vehicle Specs</Text>
+        <Text style={styles.subText}>
+          Fine-tune the model name, usable capacity, or rated consumption below.
+        </Text>
+
+        <View style={{ marginTop: 10 }}>
+          <Text style={styles.tariffFieldLabel}>Vehicle / Pack Name</Text>
+          <View style={styles.customInputBox}>
+            <TextInput
+              style={styles.customTextInput}
+              value={customNameInput}
+              onChangeText={(t) => {
+                setCustomNameInput(t);
+                updateCustomProfile({ name: t });
               }}
-            >
-              <Text
-                style={[
-                  styles.profileName,
-                  selectedProfileIndex === idx && styles.profileNameSelected,
-                ]}
-              >
-                {p.name}
-              </Text>
-              <Text style={styles.profileDetails}>
-                {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
-              </Text>
-            </TouchableOpacity>
-          ))}
+              placeholder="Tesla Model Name"
+              placeholderTextColor="#64748b"
+            />
+          </View>
+        </View>
+
+        <View style={[styles.tariffRow, { marginTop: 12 }]}>
+          <View style={styles.tariffCol}>
+            <Text style={styles.tariffFieldLabel}>Nominal Capacity</Text>
+            <View style={styles.tariffInputBox}>
+              <TextInput
+                style={styles.tariffInput}
+                value={customCapacityInput}
+                onChangeText={(t) => {
+                  setCustomCapacityInput(t);
+                  const num = parseFloat(t);
+                  if (!isNaN(num) && num > 0) {
+                    updateCustomProfile({ nominalCapacityKwh: num });
+                  }
+                }}
+                keyboardType="numeric"
+                placeholder="60.0"
+                placeholderTextColor="#64748b"
+              />
+              <Text style={styles.tariffUnitText}>kWh</Text>
+            </View>
+            <Text style={styles.tariffSubtext}>Usable pack size</Text>
+          </View>
+
+          <View style={styles.tariffCol}>
+            <Text style={styles.tariffFieldLabel}>Rated Efficiency</Text>
+            <View style={styles.tariffInputBox}>
+              <TextInput
+                style={styles.tariffInput}
+                value={customWhMiInput}
+                onChangeText={(t) => {
+                  setCustomWhMiInput(t);
+                  const num = parseFloat(t);
+                  if (!isNaN(num) && num > 0) {
+                    updateCustomProfile({ whPerMile: num });
+                  }
+                }}
+                keyboardType="numeric"
+                placeholder="220"
+                placeholderTextColor="#64748b"
+              />
+              <Text style={styles.tariffUnitText}>Wh/mi</Text>
+            </View>
+            <Text style={styles.tariffSubtext}>EPA / WLTP rating</Text>
+          </View>
         </View>
       </View>
+
+      {/* Model Selection Dropdown Modal */}
+      <Modal
+        visible={showModelDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModelDropdown(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModelDropdown(false)}
+        >
+          <View style={styles.dropdownModalContent}>
+            <Text style={styles.dropdownModalTitle}>Select Tesla Model</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {TESLA_PROFILES.map((p) => {
+                const isSelected = selectedProfile.id === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[styles.dropdownModalItem, isSelected && styles.dropdownModalItemSelected]}
+                    onPress={async () => {
+                      await selectProfileById(p.id);
+                      setCustomNameInput(p.name);
+                      setCustomCapacityInput(String(p.nominalCapacityKwh));
+                      setCustomWhMiInput(String(p.whPerMile));
+                      setShowModelDropdown(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dropdownItemName, isSelected && styles.dropdownItemNameSelected]}>
+                        {p.name}
+                      </Text>
+                      <Text style={styles.dropdownItemSub}>
+                        {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
+                      </Text>
+                    </View>
+                    {isSelected && <Text style={styles.dropdownCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.dropdownCloseBtn}
+              onPress={() => setShowModelDropdown(false)}
+            >
+              <Text style={styles.dropdownCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Units & Measurement */}
       <Text style={styles.sectionHeader}>Units & Measurement</Text>
@@ -603,10 +725,7 @@ export const SettingsScreen: React.FC = () => {
       </View>
 
       {/* App Version Footer */}
-      <View style={styles.versionFooter}>
-        <Text style={styles.versionText}>⚡ VoltIQ v1.0.5 • OTA Live Update</Text>
-        <Text style={styles.versionSubText}>Tesla Battery Intelligence • Oracle Cloud Engine</Text>
-      </View>
+      <FooterVersion />
 
       {/* Tesla OAuth Modal */}
       <TeslaLoginModal
@@ -986,22 +1105,118 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  versionFooter: {
-    marginTop: 20,
-    marginBottom: 30,
+  dropdownBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+    marginTop: 10,
   },
-  versionText: {
-    color: '#64748b',
-    fontSize: 12,
+  dropdownSelectedText: {
+    color: '#f8fafc',
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
-  versionSubText: {
-    color: '#475569',
-    fontSize: 10,
-    fontWeight: '500',
+  dropdownSubText: {
+    color: '#38bdf8',
+    fontSize: 11,
     marginTop: 2,
+  },
+  dropdownArrow: {
+    color: '#38bdf8',
+    fontSize: 12,
+    marginLeft: 8,
+  },
+  packDivider: {
+    height: 1,
+    backgroundColor: '#334155',
+    marginVertical: 14,
+  },
+  customInputBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginTop: 4,
+  },
+  customTextInput: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dropdownModalContent: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  dropdownModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#f8fafc',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  dropdownModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  dropdownModalItemSelected: {
+    borderColor: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+  },
+  dropdownItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  dropdownItemNameSelected: {
+    color: '#38bdf8',
+  },
+  dropdownItemSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  dropdownCheck: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#38bdf8',
+    marginLeft: 8,
+  },
+  dropdownCloseBtn: {
+    marginTop: 12,
+    backgroundColor: '#334155',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  dropdownCloseBtnText: {
+    color: '#e2e8f0',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
