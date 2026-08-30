@@ -47,7 +47,7 @@ let dbInstance: DatabaseSync | null = null;
 export function getDb(customPath?: string): DatabaseSync {
   if (dbInstance) return dbInstance;
 
-  const dbDir = customPath ? path.dirname(customPath) : path.join(process.cwd(), 'server');
+  const dbDir = customPath ? path.dirname(customPath) : (process.env.DATA_DIR || path.join(process.cwd(), 'server'));
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
