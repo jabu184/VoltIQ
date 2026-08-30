@@ -83,9 +83,10 @@ export function getDb(customPath?: string): DatabaseSync {
       inside_temp REAL,
       outside_temp REAL,
       is_locked INTEGER DEFAULT 1,
+      data_updated_at INTEGER,
+      last_polled_at INTEGER,
       updated_at INTEGER NOT NULL
     );
-
     CREATE TABLE IF NOT EXISTS battery_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       vin TEXT NOT NULL,
@@ -100,6 +101,9 @@ export function getDb(customPath?: string): DatabaseSync {
       trigger_reason TEXT DEFAULT 'charge_complete'
     );
   `);
+
+  try { db.exec(`ALTER TABLE vehicles ADD COLUMN data_updated_at INTEGER;`); } catch {}
+  try { db.exec(`ALTER TABLE vehicles ADD COLUMN last_polled_at INTEGER;`); } catch {}
 
   dbInstance = db;
   return db;
@@ -212,6 +216,8 @@ export function upsertVehicle(record: Partial<VehicleRecord> & { vin: string }):
         inside_temp = COALESCE(?, inside_temp),
         outside_temp = COALESCE(?, outside_temp),
         is_locked = COALESCE(?, is_locked),
+        data_updated_at = COALESCE(?, data_updated_at),
+        last_polled_at = COALESCE(?, last_polled_at),
         updated_at = ?
       WHERE vin = ?
     `);
@@ -226,6 +232,8 @@ export function upsertVehicle(record: Partial<VehicleRecord> & { vin: string }):
       record.inside_temp ?? null,
       record.outside_temp ?? null,
       record.is_locked !== undefined ? (record.is_locked ? 1 : 0) : null,
+      record.data_updated_at ?? null,
+      record.last_polled_at ?? null,
       now,
       record.vin
     );
@@ -233,8 +241,9 @@ export function upsertVehicle(record: Partial<VehicleRecord> & { vin: string }):
     const stmt = db.prepare(`
       INSERT INTO vehicles (
         vin, display_name, model, last_state, last_soc, last_rated_range,
-        last_odometer, last_charging_state, inside_temp, outside_temp, is_locked, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        last_odometer, last_charging_state, inside_temp, outside_temp, is_locked,
+        data_updated_at, last_polled_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       record.vin,
@@ -248,6 +257,8 @@ export function upsertVehicle(record: Partial<VehicleRecord> & { vin: string }):
       record.inside_temp || 20,
       record.outside_temp || 15,
       record.is_locked !== undefined ? (record.is_locked ? 1 : 0) : 1,
+      record.data_updated_at || now,
+      record.last_polled_at || now,
       now
     );
   }

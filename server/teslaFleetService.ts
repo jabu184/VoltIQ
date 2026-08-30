@@ -312,7 +312,14 @@ export class TeslaFleetService {
     const outsideTemp = typeof climate?.outside_temp === 'number' ? Math.round(climate.outside_temp * 10) / 10 : undefined;
     const isLocked = state?.locked !== undefined ? state.locked : true;
 
-    const dataTimestamp = charge?.timestamp || state?.timestamp || Date.now();
+    let dataTimestamp = charge?.timestamp || state?.timestamp;
+    if (typeof dataTimestamp === 'number' && dataTimestamp > 0) {
+      if (dataTimestamp < 10000000000) {
+        dataTimestamp = dataTimestamp * 1000;
+      }
+    } else {
+      dataTimestamp = Date.now();
+    }
 
     return {
       vin: res.vin || vin,
