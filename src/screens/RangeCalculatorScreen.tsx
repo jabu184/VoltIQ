@@ -126,6 +126,10 @@ export const RangeCalculatorScreen: React.FC = () => {
   const displayMargin = addMargin ? Math.round(enteredDistance * 0.1 * 10) / 10 : 0;
   const displayEffective = addMargin ? Math.round(enteredDistance * 1.1 * 10) / 10 : displayTarget;
 
+  // Base percentage required without margin
+  const rawBasePct = fullMaxRangeMiles > 0 ? (targetMiles / fullMaxRangeMiles) * 100 : 0;
+  const basePctNeeded = Math.round(rawBasePct);
+
   // Percentage required to achieve the miles - STRICTLY 0 DECIMAL PLACES
   const rawPctNeeded = fullMaxRangeMiles > 0 ? (effectiveMiles / fullMaxRangeMiles) * 100 : 0;
   const pctNeeded = Math.round(rawPctNeeded);
@@ -135,6 +139,11 @@ export const RangeCalculatorScreen: React.FC = () => {
   const currentSocInt = Math.round(currentSoc);
   const socDiff = currentSocInt - pctNeeded;
   const hasEnough = socDiff >= 0;
+
+  // Total safety buffer when we have enough charge (includes 10% margin if toggled)
+  const totalBufferPct = hasEnough ? Math.max(0, currentSocInt - basePctNeeded) : 0;
+  const currentAvailableDist = toDisplayDistance(currentRatedRangeMiles);
+  const safetyBufferDistance = Math.max(0, Math.round((currentAvailableDist - displayTarget) * 10) / 10);
 
   // Energy needed (kWh)
   const energyKwhNeeded = Math.round((effectiveMiles * (selectedProfile.whPerMile / 1000)) * 10) / 10;
@@ -311,7 +320,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {isOver100
                 ? `⚠️ï¸ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
                 : hasEnough
-                ? `✓ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
+                ? `✓ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${totalBufferPct}% [${safetyBufferDistance} ${unitLabel}] safety buffer.`
                 : `🔌 Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
             </Text>
           </View>
