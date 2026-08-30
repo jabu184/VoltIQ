@@ -526,14 +526,17 @@ export const SettingsScreen: React.FC = () => {
             : 'All telemetry data is saved strictly on-device in SQLite.'}
         </Text>
 
-        <View style={[styles.buttonRow, { marginTop: 14 }]}>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handleSeedData}>
-            <Text style={styles.secondaryBtnText}>Seed Sample History</Text>
-          </TouchableOpacity>
+        <View style={{ marginTop: 14 }}>
           <TouchableOpacity style={styles.dangerBtn} onPress={handleClearDatabase}>
-            <Text style={styles.dangerBtnText}>🗑️ Clear All Data</Text>
+            <Text style={styles.dangerBtnText}>🗑️ Clear All Telemetry Data</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* App Version Footer */}
+      <View style={styles.versionFooter}>
+        <Text style={styles.versionText}>⚡ VoltIQ v1.0.4 • Build 7b914b4</Text>
+        <Text style={styles.versionSubText}>Tesla Battery Intelligence • Oracle Cloud Engine</Text>
       </View>
 
       {/* Tesla OAuth Modal */}
@@ -856,5 +859,23 @@ const styles = StyleSheet.create({
   },
   currencyBtnTextActive: {
     color: '#ffffff',
+  },
+  versionFooter: {
+    marginTop: 20,
+    marginBottom: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  versionText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  versionSubText: {
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });

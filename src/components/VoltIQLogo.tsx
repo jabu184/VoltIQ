@@ -1,5 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+
+export const APP_VERSION = 'v1.0.4';
+export const APP_BUILD = 'Build 7b914b4';
 
 interface VoltIQLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -17,8 +20,22 @@ export const VoltIQLogo: React.FC<VoltIQLogoProps> = ({
   const iconSize = isSm ? 14 : isLg ? 18 : 16;
   const badgePadding = isSm ? 4 : 5;
 
+  const handleShowVersion = () => {
+    const title = `⚡ VoltIQ ${APP_VERSION}`;
+    const message = `Tesla Battery Intelligence\n\n• Version: ${APP_VERSION} (${APP_BUILD})\n• Cloud Server: 145.241.192.121\n• Engine: 24/7 Tesla Fleet API Live\n• OTA Updates: Enabled`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message, [{ text: 'OK', style: 'default' }]);
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={handleShowVersion}
+      style={styles.container}
+    >
       <View style={styles.brandRow}>
         {/* Minimalist Energy Spark Badge */}
         <View
@@ -48,7 +65,7 @@ export const VoltIQLogo: React.FC<VoltIQLogoProps> = ({
           Tesla Battery Intelligence
         </Text>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 
