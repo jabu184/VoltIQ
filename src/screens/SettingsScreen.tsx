@@ -145,7 +145,7 @@ export const SettingsScreen: React.FC = () => {
     if (health) {
       setSnapshotCount(health.snapshotCount);
       showAlert(
-        'Server Connected! ðŸŸ¢',
+        'Server Connected! 🟢',
         `VoltIQ Backend is active.\nUptime: ${health.uptimeSeconds}s\nSnapshots in Server DB: ${health.snapshotCount}\nSmart Poller: Active`
       );
     } else {
@@ -209,7 +209,7 @@ export const SettingsScreen: React.FC = () => {
       setSnapshotCount(0);
       const health = await checkServerHealth();
       setServerHealth(health);
-      showAlert('Database Cleared ðŸ—‘ï¸', 'All local and server battery snapshots have been deleted.');
+      showAlert('Database Cleared 🗑️ï¸', 'All local and server battery snapshots have been deleted.');
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -257,8 +257,11 @@ export const SettingsScreen: React.FC = () => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Settings & Configuration</Text>
-        <Text style={styles.screenSubtitle}>BYOK credentials, pack profile, and local storage</Text>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={styles.screenTitle}>Settings</Text>
+          <Text style={styles.screenSubtitle}>Credentials, pack profile & storage</Text>
+        </View>
+        <HeaderStatusBadges />
       </View>
 
       {/* Vehicle Profile Selection & Custom Pack */}
@@ -445,7 +448,7 @@ export const SettingsScreen: React.FC = () => {
             onPress={() => setCurrency('GBP')}
           >
             <Text style={[styles.currencyBtnText, currency === 'GBP' && styles.currencyBtnTextActive]}>
-              Pounds (Â£)
+              Pounds (£)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -572,7 +575,7 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.label}>Connection Status</Text>
           <View style={[styles.statusBadge, hasSavedToken ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {hasSavedToken ? 'â— PAIRED' : 'â—‹ UNPAIRED'}
+              {hasSavedToken ? 'â— PAIRED' : '○ UNPAIRED'}
             </Text>
           </View>
         </View>
@@ -580,7 +583,7 @@ export const SettingsScreen: React.FC = () => {
         {hasSavedToken ? (
           <View style={styles.connectedBox}>
             <View style={styles.connectedHeaderRow}>
-              <Text style={{ fontSize: 20 }}>ðŸš—</Text>
+              <Text style={{ fontSize: 20 }}>🚗</Text>
               <View style={{ marginLeft: 10, flex: 1 }}>
                 <Text style={styles.connectedVehicleName}>
                   {connectedVehicleName || 'Tesla Model 3'}
@@ -597,7 +600,7 @@ export const SettingsScreen: React.FC = () => {
             </View>
 
             <TouchableOpacity style={styles.disconnectTeslaBtn} onPress={handleLogoutTesla}>
-              <Text style={styles.disconnectTeslaBtnText}>ðŸ”Œ Disconnect & Logout Tesla Account</Text>
+              <Text style={styles.disconnectTeslaBtnText}>🔌 Disconnect & Logout Tesla Account</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -679,7 +682,7 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.label}>Server Status</Text>
           <View style={[styles.statusBadge, serverHealth ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {serverHealth ? `â— CONNECTED (${serverHealth.snapshotCount} SNAPSHOTS)` : 'â—‹ OFFLINE (LOCAL FALLBACK)'}
+              {serverHealth ? `â— CONNECTED (${serverHealth.snapshotCount} SNAPSHOTS)` : '○ OFFLINE (LOCAL FALLBACK)'}
             </Text>
           </View>
         </View>
@@ -699,7 +702,7 @@ export const SettingsScreen: React.FC = () => {
         />
 
         <TouchableOpacity style={styles.teslaLoginBtn} onPress={handleTestServer}>
-          <Text style={styles.teslaLoginBtnText}>ðŸ”Œ Test Server Connection</Text>
+          <Text style={styles.teslaLoginBtnText}>🔌 Test Server Connection</Text>
         </TouchableOpacity>
       </View>
 
@@ -720,7 +723,7 @@ export const SettingsScreen: React.FC = () => {
 
         <View style={{ marginTop: 14 }}>
           <TouchableOpacity style={styles.dangerBtn} onPress={handleClearDatabase}>
-            <Text style={styles.dangerBtnText}>ðŸ—‘ï¸ Clear All Telemetry Data</Text>
+            <Text style={styles.dangerBtnText}>🗑️ï¸ Clear All Telemetry Data</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -748,6 +751,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 10,
     marginBottom: 16,
   },

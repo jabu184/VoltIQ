@@ -244,10 +244,11 @@ export const DashboardScreen: React.FC = () => {
     >
       {/* App Header */}
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.brandTitle}>Vehicle Telemetry</Text>
           <Text style={styles.brandSubtitle}>Real-time battery metrics & health</Text>
         </View>
+        <HeaderStatusBadges isPaired={hasToken} isOnline={isCarOnline} />
       </View>
 
       {/* Connect Banner if not linked */}
@@ -333,11 +334,11 @@ export const DashboardScreen: React.FC = () => {
             ]}
           >
             {typeof telemetry?.insideTempC === 'number'
-              ? `${Number.isInteger(telemetry.insideTempC) ? telemetry.insideTempC : telemetry.insideTempC.toFixed(1)}Â°C`
+              ? `${Number.isInteger(telemetry.insideTempC) ? telemetry.insideTempC : telemetry.insideTempC.toFixed(1)}°C`
               : '--'}
             <Text style={[styles.tempDividerText, !isCarOnline && styles.textOfflineMuted]}> / </Text>
             {typeof telemetry?.outsideTempC === 'number'
-              ? `${Number.isInteger(telemetry.outsideTempC) ? telemetry.outsideTempC : telemetry.outsideTempC.toFixed(1)}Â°C`
+              ? `${Number.isInteger(telemetry.outsideTempC) ? telemetry.outsideTempC : telemetry.outsideTempC.toFixed(1)}°C`
               : '--'}
           </Text>
           <Text style={[styles.cardSub, !isCarOnline && styles.cardSubOffline]}>
@@ -363,7 +364,7 @@ export const DashboardScreen: React.FC = () => {
                 : styles.textOfflineMuted,
             ]}
           >
-            {(telemetry?.isLocked ?? true) ? 'ðŸ”’ Locked' : 'ðŸ”“ Unlocked'}
+            {(telemetry?.isLocked ?? true) ? '🔒 Locked' : '🔓 Unlocked'}
           </Text>
           <Text style={[styles.cardSub, !isCarOnline && styles.cardSubOffline]}>
             {isCarOnline
@@ -390,7 +391,7 @@ export const DashboardScreen: React.FC = () => {
           {refreshing ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.syncButtonText}>ðŸ”„ Sync Telemetry & Log Snapshot</Text>
+            <Text style={styles.syncButtonText}>🔄 Sync Telemetry & Log Snapshot</Text>
           )}
         </TouchableOpacity>
       </View>

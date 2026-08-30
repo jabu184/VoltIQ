@@ -175,10 +175,13 @@ export const BatteryHealthScreen: React.FC = () => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Battery Health & Diagnostics</Text>
-        <Text style={styles.screenSubtitle}>
-          Real-time telemetry analysis based on {snapshots.length} historical logs
-        </Text>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={styles.screenTitle}>Battery Health</Text>
+          <Text style={styles.screenSubtitle}>
+            Real-time telemetry analysis ({snapshots.length} logs)
+          </Text>
+        </View>
+        <HeaderStatusBadges />
       </View>
 
       {/* Degradation Chart with freemium paywall */}
@@ -262,7 +265,7 @@ export const BatteryHealthScreen: React.FC = () => {
       {/* Resale Certificate Section */}
       <View style={styles.certificateBanner}>
         <View style={styles.certIconContainer}>
-          <Text style={styles.certIcon}>ðŸ“œ</Text>
+          <Text style={styles.certIcon}>📜</Text>
         </View>
         <View style={styles.certTextContainer}>
           <Text style={styles.certTitle}>AutoTrader / eBay Resale Certificate</Text>
@@ -281,7 +284,7 @@ export const BatteryHealthScreen: React.FC = () => {
             <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.certButtonText}>
-              {isPremium ? 'ðŸ“„ Export Resale PDF Certificate' : `ðŸ”’ Unlock Certificate (${priceLabel})`}
+              {isPremium ? '📄 Export Resale PDF Certificate' : `🔒 Unlock Certificate (${priceLabel})`}
             </Text>
           )}
         </TouchableOpacity>
@@ -370,6 +373,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 10,
     marginBottom: 16,
   },

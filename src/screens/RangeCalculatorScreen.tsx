@@ -170,10 +170,13 @@ export const RangeCalculatorScreen: React.FC = () => {
     >
       {/* Screen Header */}
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Calculator</Text>
-        <Text style={styles.screenSubtitle}>
-          Calculate required battery percentage, charge times, and costs
-        </Text>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={styles.screenTitle}>Range Calculator</Text>
+          <Text style={styles.screenSubtitle}>
+            Required battery %, charge times & costs
+          </Text>
+        </View>
+        <HeaderStatusBadges />
       </View>
 
       {/* Live Car Stats Context Card */}
@@ -294,7 +297,7 @@ export const RangeCalculatorScreen: React.FC = () => {
                 ? `âš ï¸ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
                 : hasEnough
                 ? `âœ“ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
-                : `ðŸ”Œ Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
+                : `🔌 Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
             </Text>
           </View>
         )}
@@ -340,7 +343,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Home AC Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>ðŸ”Œ</Text>
+                  <Text style={styles.columnIcon}>🔌</Text>
                   <View>
                     <Text style={styles.columnName}>Home AC</Text>
                     <Text style={styles.columnSub}>{homePowerKw} kW ({homeRate}{currencySubUnit}/kWh)</Text>
@@ -392,7 +395,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Home AC Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>ðŸ”Œ</Text>
+                  <Text style={styles.columnIcon}>🔌</Text>
                   <View>
                     <Text style={styles.columnName}>Home AC</Text>
                     <Text style={styles.columnSub}>{homePowerKw} kW ({homeRate}{currencySubUnit}/kWh)</Text>
@@ -451,6 +454,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 10,
     marginBottom: 16,
   },

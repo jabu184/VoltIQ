@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { fetchServerVehicle, checkServerHealth } from '../services/apiClient';
+import { fetchServerVehicle } from '../services/apiClient';
 import { getTeslaRefreshToken } from '../services/teslaClient';
 
-export const HeaderStatusBadges: React.FC = () => {
-  const [hasToken, setHasToken] = useState<boolean>(false);
-  const [isCarOnline, setIsCarOnline] = useState<boolean>(false);
+interface HeaderStatusBadgesProps {
+  isPaired?: boolean;
+  isOnline?: boolean;
+}
+
+export const HeaderStatusBadges: React.FC<HeaderStatusBadgesProps> = ({
+  isPaired: propIsPaired,
+  isOnline: propIsOnline,
+}) => {
+  const [internalPaired, setInternalPaired] = useState<boolean>(propIsPaired ?? false);
+  const [internalOnline, setInternalOnline] = useState<boolean>(propIsOnline ?? false);
 
   const checkStatus = async () => {
     try {
@@ -14,33 +22,47 @@ export const HeaderStatusBadges: React.FC = () => {
 
       const serverLinked = !!serverVehicleData?.isAccountLinked;
       const isLinked = serverLinked || !!token;
-      setHasToken(isLinked);
+      setInternalPaired(isLinked);
 
       const v = serverVehicleData?.vehicle;
       const online = v?.last_state === 'online';
-      setIsCarOnline(online);
+      setInternalOnline(online);
     } catch {
       // ignore
     }
   };
 
   useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    if (propIsPaired !== undefined) {
+      setInternalPaired(propIsPaired);
+    }
+    if (propIsOnline !== undefined) {
+      setInternalOnline(propIsOnline);
+    }
+  }, [propIsPaired, propIsOnline]);
+
+  useEffect(() => {
+    if (propIsPaired === undefined || propIsOnline === undefined) {
+      checkStatus();
+      const interval = setInterval(checkStatus, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [propIsPaired, propIsOnline]);
+
+  const isPaired = propIsPaired !== undefined ? propIsPaired : internalPaired;
+  const isOnline = propIsOnline !== undefined ? propIsOnline : internalOnline;
 
   return (
     <View style={styles.container}>
-      <View style={[styles.badge, hasToken ? styles.badgePaired : styles.badgeUnpaired]}>
-        <Text style={[styles.badgeText, hasToken ? styles.textPaired : styles.textUnpaired]}>
-          {hasToken ? '● PAIRED' : '○ UNPAIRED'}
+      <View style={[styles.badge, isPaired ? styles.badgePaired : styles.badgeUnpaired]}>
+        <Text style={[styles.badgeText, isPaired ? styles.textPaired : styles.textUnpaired]}>
+          {isPaired ? '● PAIRED' : '○ UNPAIRED'}
         </Text>
       </View>
-      {hasToken && (
-        <View style={[styles.badge, isCarOnline ? styles.badgeConnected : styles.badgeOffline]}>
-          <Text style={[styles.badgeText, isCarOnline ? styles.textConnected : styles.textOffline]}>
-            {isCarOnline ? '● CONNECTED' : '○ OFFLINE'}
+      {isPaired && (
+        <View style={[styles.badge, isOnline ? styles.badgeConnected : styles.badgeOffline]}>
+          <Text style={[styles.badgeText, isOnline ? styles.textConnected : styles.textOffline]}>
+            {isOnline ? '● CONNECTED' : '○ OFFLINE'}
           </Text>
         </View>
       )}
@@ -53,6 +75,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
   },
   badge: {
     paddingHorizontal: 8,
