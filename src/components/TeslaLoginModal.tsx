@@ -20,6 +20,7 @@ import {
   saveTeslaRefreshToken,
 } from '../services/teslaClient';
 import { insertSnapshot } from '../services/db';
+import { getServerUrl, fetchServerVehicle } from '../services/apiClient';
 import { calculateBatteryCapacity, TESLA_PROFILES } from '../services/batteryLogic';
 
 interface TeslaLoginModalProps {
@@ -54,13 +55,31 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
   // Initialize fresh PKCE parameters every time modal opens
   useEffect(() => {
     if (visible) {
-      const verifier = generateCodeVerifier();
-      const challenge = generateCodeChallenge(verifier);
-      const url = buildTeslaAuthUrl(challenge);
-      setCodeVerifier(verifier);
-      setAuthUrl(url);
+      let isMounted = true;
+      async function initAuth() {
+        try {
+          const serverUrl = getServerUrl();
+          const res = await fetch(`${serverUrl}/api/auth/url`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.authUrl && isMounted) {
+              setAuthUrl(data.authUrl);
+              return;
+            }
+          }
+        } catch {}
+        const verifier = generateCodeVerifier();
+        const challenge = generateCodeChallenge(verifier);
+        const url = buildTeslaAuthUrl(challenge, '2dd7a3b6-3daa-4975-8234-1109615d4deb', 'https://medfizz.com/api/auth/callback');
+        if (isMounted) {
+          setCodeVerifier(verifier);
+          setAuthUrl(url);
+        }
+      }
+      initAuth();
       setCallbackInput('');
       setOauthLoading(false);
+      return () => { isMounted = false; };
     }
   }, [visible]);
 
@@ -70,6 +89,24 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
       await Linking.openURL(authUrl);
     } catch {
       Alert.alert('Error', 'Could not launch browser for Tesla login.');
+    }
+  };
+
+  const handleVerifyServerLink = async () => {
+    setOauthLoading(true);
+    try {
+      const serverData = await fetchServerVehicle();
+      if (serverData && serverData.isAccountLinked) {
+        Alert.alert('Connected! 🎉', `Successfully verified connection for ${serverData.vehicle?.display_name || 'Tesla Model 3'}!`);
+        onSuccess();
+        onClose();
+      } else {
+        Alert.alert('Not Detected Yet', 'Server has not received the callback yet. Please complete sign-in in your browser or paste the callback code below.');
+      }
+    } catch {
+      Alert.alert('Check Error', 'Could not check server link status.');
+    } finally {
+      setOauthLoading(false);
     }
   };
 
@@ -254,7 +291,7 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
 
                     <TextInput
                       style={styles.input}
-                      placeholder="https://auth.tesla.com/void/callback?code=NA_..."
+                      placeholder="https://medfizz.com/api/auth/callback?code=NA_..."
                       placeholderTextColor="#64748b"
                       value={callbackInput}
                       onChangeText={setCallbackInput}
@@ -265,17 +302,27 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
                 </View>
 
                 {/* Step 3 */}
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={handleCompleteOAuth}
-                  disabled={oauthLoading}
-                >
-                  {oauthLoading ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <Text style={styles.actionBtnText}>⚡ Exchange Code & Connect</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={{ gap: 10, marginTop: 6 }}>
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={handleVerifyServerLink}
+                    disabled={oauthLoading}
+                  >
+                    {oauthLoading ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <Text style={styles.actionBtnText}>✓ Verify & Link Account</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#334155' }]}
+                    onPress={handleCompleteOAuth}
+                    disabled={oauthLoading}
+                  >
+                    <Text style={styles.actionBtnText}>⚡ Manual Exchange from Pasted Code</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 

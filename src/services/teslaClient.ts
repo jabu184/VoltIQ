@@ -128,8 +128,8 @@ export function generateCodeChallenge(verifier: string): string {
   return verifier;
 }
 
-const DEFAULT_CLIENT_ID = '81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384';
-const DEFAULT_REDIRECT_URI = 'https://auth.tesla.com/void/callback';
+const DEFAULT_CLIENT_ID = '2dd7a3b6-3daa-4975-8234-1109615d4deb';
+const DEFAULT_REDIRECT_URI = 'https://medfizz.com/api/auth/callback';
 
 export function buildTeslaAuthUrl(
   codeChallenge: string,
