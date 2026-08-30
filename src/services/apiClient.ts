@@ -1,21 +1,13 @@
 import { Platform } from 'react-native';
 import { BatterySnapshot } from './db';
 
-const CLOUD_TUNNEL_BACKEND = 'http://145.241.192.121:3001';
+const CLOUD_BACKEND_URL = 'http://145.241.192.121:3001';
 
 function getDefaultServerUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  // On local web browser, connect directly to local port 3001
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:3001';
-    }
-  }
-  // On physical iOS/Android devices (Expo Go) or remote web, use the secure cloud tunnel
-  return CLOUD_TUNNEL_BACKEND;
+  return CLOUD_BACKEND_URL;
 }
 
 const DEFAULT_SERVER_URL = getDefaultServerUrl();
@@ -62,9 +54,13 @@ export interface ServerVehicleResponse {
 
 export async function checkServerHealth(): Promise<ServerHealth | null> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(`${activeServerUrl}/api/health`, {
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -74,9 +70,13 @@ export async function checkServerHealth(): Promise<ServerHealth | null> {
 
 export async function fetchServerVehicle(): Promise<ServerVehicleResponse | null> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(`${activeServerUrl}/api/vehicle`, {
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -86,9 +86,13 @@ export async function fetchServerVehicle(): Promise<ServerVehicleResponse | null
 
 export async function fetchServerSnapshots(limit: number = 5000): Promise<BatterySnapshot[]> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`${activeServerUrl}/api/snapshots?limit=${limit}`, {
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return [];
     const data = await res.json();
     return data.snapshots || [];
@@ -97,61 +101,76 @@ export async function fetchServerSnapshots(limit: number = 5000): Promise<Batter
   }
 }
 
+export async function updateServerSnapshot(id: number, updates: Partial<BatterySnapshot>): Promise<boolean> {
+  try {
+    const res = await fetch(`${activeServerUrl}/api/snapshots/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteServerSnapshot(id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${activeServerUrl}/api/snapshots/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function triggerServerSync(): Promise<{ success: boolean; message: string }> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(`${activeServerUrl}/api/sync`, {
       method: 'POST',
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) {
-      const err = await res.json();
-      return { success: false, message: err.message || err.error || 'Server sync failed' };
+      const err = await res.json().catch(() => ({}));
+      return { success: false, message: err.error || `Server responded with ${res.status}` };
     }
-    return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err.message || 'Could not connect to server' };
+    const data = await res.json();
+    return {
+      success: true,
+      message: data.message || `Telemetry synced! Vehicle is ${data.state || 'active'}.`,
+    };
+  } catch {
+    return { success: false, message: 'Could not connect to backend server.' };
   }
 }
 
-export async function getServerAuthUrl(): Promise<string | null> {
+export async function clearServerDatabase(): Promise<boolean> {
   try {
-    const res = await fetch(`${activeServerUrl}/api/auth/url`, {
+    const res = await fetch(`${activeServerUrl}/api/snapshots/clear`, {
+      method: 'POST',
       headers: { Accept: 'application/json' },
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.authUrl || null;
+    return res.ok;
   } catch {
-    return null;
+    return false;
   }
 }
 
-export async function clearServerDatabase(): Promise<{ success: boolean; message: string }> {
-  try {
-    const res = await fetch(`${activeServerUrl}/api/db/clear`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) {
-      return { success: false, message: 'Server failed to clear database.' };
-    }
-    return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err?.message || 'Could not connect to server.' };
-  }
-}
-
-export async function disconnectServerTeslaAccount(): Promise<{ success: boolean; message: string }> {
+export async function disconnectServerTeslaAccount(): Promise<boolean> {
   try {
     const res = await fetch(`${activeServerUrl}/api/auth/disconnect`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { Accept: 'application/json' },
     });
-    if (!res.ok) {
-      return { success: false, message: 'Server failed to disconnect Tesla account.' };
-    }
-    return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err?.message || 'Could not connect to server.' };
+    return res.ok;
+  } catch {
+    return false;
   }
 }

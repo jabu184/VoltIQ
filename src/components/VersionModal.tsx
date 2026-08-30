@@ -7,8 +7,8 @@ import {
   Modal,
 } from 'react-native';
 
-export const APP_VERSION = 'v1.0.5';
-export const APP_BUILD = 'OTA Wireless #2';
+export const APP_VERSION = 'v1.0.6';
+export const APP_BUILD = 'OTA Wireless #3';
 
 interface VersionModalProps {
   visible: boolean;

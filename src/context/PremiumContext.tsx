@@ -30,15 +30,19 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     async function initPurchases() {
       try {
-        // Attempt to check if RevenueCat is initialized or fallback to persisted setting
-        if (Platform.OS !== 'web') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const stored = window.localStorage.getItem(PREVIEW_PREMIUM_KEY);
+          if (stored === 'true') {
+            setIsPremium(true);
+          }
+        } else {
           const stored = await SecureStore.getItemAsync(PREVIEW_PREMIUM_KEY);
           if (stored === 'true') {
             setIsPremium(true);
           }
         }
       } catch {
-        // Fallback for mock environments
+        // Fallback
       } finally {
         setIsLoading(false);
       }
@@ -49,9 +53,9 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const unlockLifetimePremium = async (): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // In production with native builds, Purchases.purchasePackage(lifetimePkg) would execute.
-      // In sandbox/local-first Expo environment:
-      if (Platform.OS !== 'web') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(PREVIEW_PREMIUM_KEY, 'true');
+      } else {
         await SecureStore.setItemAsync(PREVIEW_PREMIUM_KEY, 'true');
       }
       setIsPremium(true);
@@ -67,7 +71,13 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const restorePurchases = async (): Promise<boolean> => {
     setIsLoading(true);
     try {
-      if (Platform.OS !== 'web') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const stored = window.localStorage.getItem(PREVIEW_PREMIUM_KEY);
+        if (stored === 'true') {
+          setIsPremium(true);
+          return true;
+        }
+      } else {
         const stored = await SecureStore.getItemAsync(PREVIEW_PREMIUM_KEY);
         if (stored === 'true') {
           setIsPremium(true);
@@ -83,7 +93,9 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleMockPremium = async (): Promise<void> => {
     const nextState = !isPremium;
     setIsPremium(nextState);
-    if (Platform.OS !== 'web') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(PREVIEW_PREMIUM_KEY, nextState ? 'true' : 'false');
+    } else {
       await SecureStore.setItemAsync(PREVIEW_PREMIUM_KEY, nextState ? 'true' : 'false');
     }
   };

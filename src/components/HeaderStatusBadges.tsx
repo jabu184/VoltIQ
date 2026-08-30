@@ -2,22 +2,29 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { fetchServerVehicle } from '../services/apiClient';
 import { getTeslaRefreshToken } from '../services/teslaClient';
+import { useVehicleProfile } from '../context/VehicleProfileContext';
 
 interface HeaderStatusBadgesProps {
   isPaired?: boolean;
   isOnline?: boolean;
+  isManual?: boolean;
 }
 
 export const HeaderStatusBadges: React.FC<HeaderStatusBadgesProps> = ({
   isPaired: propIsPaired,
   isOnline: propIsOnline,
+  isManual: propIsManual,
 }) => {
+  const { isManualMode: ctxIsManualMode, activeVehicle } = useVehicleProfile();
   const [internalPaired, setInternalPaired] = useState<boolean>(propIsPaired ?? false);
   const [internalOnline, setInternalOnline] = useState<boolean>(propIsOnline ?? false);
 
+  const isManual = propIsManual !== undefined ? propIsManual : (propIsPaired !== undefined ? !propIsPaired : ctxIsManualMode);
+
   const checkStatus = async () => {
+    if (isManual) return;
     try {
-      const token = await getTeslaRefreshToken();
+      const token = await getTeslaRefreshToken(activeVehicle.id);
       const serverVehicleData = await fetchServerVehicle();
 
       const serverLinked = !!serverVehicleData?.isAccountLinked;
@@ -42,15 +49,28 @@ export const HeaderStatusBadges: React.FC<HeaderStatusBadgesProps> = ({
   }, [propIsPaired, propIsOnline]);
 
   useEffect(() => {
-    if (propIsPaired === undefined || propIsOnline === undefined) {
+    if (!isManual && (propIsPaired === undefined || propIsOnline === undefined)) {
       checkStatus();
       const interval = setInterval(checkStatus, 10000);
       return () => clearInterval(interval);
     }
-  }, [propIsPaired, propIsOnline]);
+  }, [isManual, propIsPaired, propIsOnline]);
 
-  const isPaired = propIsPaired !== undefined ? propIsPaired : internalPaired;
+  const isPaired = propIsPaired !== undefined ? propIsPaired : (isManual ? false : internalPaired);
   const isOnline = propIsOnline !== undefined ? propIsOnline : internalOnline;
+
+  if (isManual) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.badge, styles.badgeManual]}>
+          <Text style={[styles.badgeText, styles.textManual]}>● MANUAL</Text>
+        </View>
+        <View style={[styles.badge, styles.badgeLocal]}>
+          <Text style={[styles.badgeText, styles.textLocal]}>○ LOCAL</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -83,6 +103,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
+  badgeManual: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
+  },
+  badgeLocal: {
+    backgroundColor: '#1e293b',
+    borderColor: '#64748b',
+  },
   badgePaired: {
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
     borderColor: '#38bdf8',
@@ -103,6 +131,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  textManual: {
+    color: '#f59e0b',
+  },
+  textLocal: {
+    color: '#94a3b8',
   },
   textPaired: {
     color: '#38bdf8',

@@ -3,8 +3,10 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 export type DistanceUnit = 'miles' | 'km';
+export type EfficiencyUnit = 'distance_per_kwh' | 'energy_per_distance'; // mi/kWh vs Wh/mi
 
 const UNIT_STORAGE_KEY = 'voltiq_distance_unit';
+const EFFICIENCY_UNIT_STORAGE_KEY = 'voltiq_efficiency_unit';
 
 interface UnitContextType {
   unit: DistanceUnit;
@@ -14,6 +16,10 @@ interface UnitContextType {
   formatDistance: (miles: number, decimals?: number) => string;
   unitLabel: string;
   unitLongLabel: string;
+  efficiencyUnit: EfficiencyUnit;
+  setEfficiencyUnit: (unit: EfficiencyUnit) => Promise<void>;
+  formatEfficiency: (whPerMile: number) => string;
+  efficiencyLabel: string;
 }
 
 const UnitContext = createContext<UnitContextType>({
@@ -24,30 +30,41 @@ const UnitContext = createContext<UnitContextType>({
   formatDistance: (m) => `${m} mi`,
   unitLabel: 'mi',
   unitLongLabel: 'Miles',
+  efficiencyUnit: 'distance_per_kwh',
+  setEfficiencyUnit: async () => {},
+  formatEfficiency: (wh) => `${(1000 / (wh || 222)).toFixed(2)} mi/kWh`,
+  efficiencyLabel: 'mi/kWh',
 });
 
 const KM_PER_MILE = 1.609344;
 
 export const UnitProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [unit, setUnitState] = useState<DistanceUnit>('miles');
+  const [efficiencyUnit, setEfficiencyUnitState] = useState<EfficiencyUnit>('distance_per_kwh');
 
   useEffect(() => {
-    async function loadUnit() {
+    async function loadSettings() {
       try {
-        let saved: string | null = null;
+        let savedUnit: string | null = null;
+        let savedEff: string | null = null;
         if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-          saved = localStorage.getItem(UNIT_STORAGE_KEY);
+          savedUnit = localStorage.getItem(UNIT_STORAGE_KEY);
+          savedEff = localStorage.getItem(EFFICIENCY_UNIT_STORAGE_KEY);
         } else {
-          saved = await SecureStore.getItemAsync(UNIT_STORAGE_KEY);
+          savedUnit = await SecureStore.getItemAsync(UNIT_STORAGE_KEY);
+          savedEff = await SecureStore.getItemAsync(EFFICIENCY_UNIT_STORAGE_KEY);
         }
-        if (saved === 'km' || saved === 'miles') {
-          setUnitState(saved);
+        if (savedUnit === 'km' || savedUnit === 'miles') {
+          setUnitState(savedUnit);
+        }
+        if (savedEff === 'distance_per_kwh' || savedEff === 'energy_per_distance') {
+          setEfficiencyUnitState(savedEff);
         }
       } catch (err) {
-        console.warn('Could not load unit setting:', err);
+        console.warn('Could not load unit settings:', err);
       }
     }
-    loadUnit();
+    loadSettings();
   }, []);
 
   const setUnit = async (newUnit: DistanceUnit) => {
@@ -60,6 +77,19 @@ export const UnitProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.warn('Could not save unit setting:', err);
+    }
+  };
+
+  const setEfficiencyUnit = async (newEffUnit: EfficiencyUnit) => {
+    setEfficiencyUnitState(newEffUnit);
+    try {
+      if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(EFFICIENCY_UNIT_STORAGE_KEY, newEffUnit);
+      } else {
+        await SecureStore.setItemAsync(EFFICIENCY_UNIT_STORAGE_KEY, newEffUnit);
+      }
+    } catch (err) {
+      console.warn('Could not save efficiency unit setting:', err);
     }
   };
 
@@ -83,6 +113,33 @@ export const UnitProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return `${formatted} ${unit === 'km' ? 'km' : 'mi'}`;
   };
 
+  const formatEfficiency = (whPerMile: number) => {
+    const safeWh = whPerMile > 0 ? whPerMile : 222;
+    if (efficiencyUnit === 'distance_per_kwh') {
+      if (unit === 'km') {
+        const kmPerKwh = (1000 / safeWh) * KM_PER_MILE;
+        return `${kmPerKwh.toFixed(2)} km/kWh`;
+      }
+      const miPerKwh = 1000 / safeWh;
+      return `${miPerKwh.toFixed(2)} mi/kWh`;
+    } else {
+      if (unit === 'km') {
+        const whPerKm = Math.round(safeWh / KM_PER_MILE);
+        return `${whPerKm} Wh/km`;
+      }
+      return `${Math.round(safeWh)} Wh/mi`;
+    }
+  };
+
+  const efficiencyLabel =
+    efficiencyUnit === 'distance_per_kwh'
+      ? unit === 'km'
+        ? 'km/kWh'
+        : 'mi/kWh'
+      : unit === 'km'
+      ? 'Wh/km'
+      : 'Wh/mi';
+
   return (
     <UnitContext.Provider
       value={{
@@ -93,6 +150,10 @@ export const UnitProvider: React.FC<{ children: React.ReactNode }> = ({ children
         formatDistance,
         unitLabel: unit === 'km' ? 'km' : 'mi',
         unitLongLabel: unit === 'km' ? 'Kilometers' : 'Miles',
+        efficiencyUnit,
+        setEfficiencyUnit,
+        formatEfficiency,
+        efficiencyLabel,
       }}
     >
       {children}

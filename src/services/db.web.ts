@@ -1,5 +1,6 @@
 export interface BatterySnapshot {
   id?: number;
+  vehicle_id?: string;
   timestamp: number;
   odometer_miles: number;
   battery_level_pct: number;
@@ -38,29 +39,62 @@ export async function initDatabase(): Promise<void> {
   // Web storage ready
 }
 
-export async function insertSnapshot(snapshot: Omit<BatterySnapshot, 'id'>): Promise<number> {
+export async function insertSnapshot(snapshot: Omit<BatterySnapshot, 'id'>, vehicleId?: string): Promise<number> {
+  const vId = vehicleId || snapshot.vehicle_id || 'default_car';
   const current = getWebSnapshots();
-  const newId = current.length > 0 ? Math.max(...current.map((s) => s.id || 0)) + 1 : 1;
-  const newSnap: BatterySnapshot = { ...snapshot, id: newId };
+  const newId = current.length > 0 ? Math.max(...current.map((s) => Number(s.id) || 0)) + 1 : 1;
+  const newSnap: BatterySnapshot = { ...snapshot, vehicle_id: vId, id: newId };
   current.unshift(newSnap);
   saveWebSnapshots(current);
   return newId;
 }
 
-export async function getSnapshots(limit: number = 100): Promise<BatterySnapshot[]> {
-  return getWebSnapshots().slice(0, limit);
+export async function getSnapshots(limit: number = 100, vehicleId?: string): Promise<BatterySnapshot[]> {
+  let list = getWebSnapshots();
+  if (vehicleId) {
+    list = list.filter(
+      (s) =>
+        s.vehicle_id === vehicleId ||
+        (!s.vehicle_id && (vehicleId === 'veh_default' || vehicleId === 'default_car')) ||
+        (s.vehicle_id === 'default_car' && vehicleId === 'veh_default') ||
+        (s.vehicle_id === 'veh_default' && vehicleId === 'default_car')
+    );
+  }
+  return list.slice(0, limit);
 }
 
-export async function getLatestSnapshot(): Promise<BatterySnapshot | null> {
-  const list = getWebSnapshots();
+export async function getLatestSnapshot(vehicleId?: string): Promise<BatterySnapshot | null> {
+  const list = await getSnapshots(1, vehicleId);
   return list.length > 0 ? list[0] : null;
 }
 
-export async function clearSnapshots(): Promise<void> {
-  saveWebSnapshots([]);
+export async function updateSnapshot(id: number, updates: Partial<BatterySnapshot>, vehicleId?: string): Promise<boolean> {
+  const list = getWebSnapshots();
+  const index = list.findIndex((s) => Number(s.id) === Number(id));
+  if (index === -1) return false;
+  list[index] = { ...list[index], ...updates };
+  saveWebSnapshots(list);
+  return true;
 }
 
-export async function seedSampleData(): Promise<void> {
+export async function deleteSnapshot(id: number, vehicleId?: string): Promise<boolean> {
+  const list = getWebSnapshots();
+  const filtered = list.filter((s) => Number(s.id) !== Number(id));
+  saveWebSnapshots(filtered);
+  return filtered.length < list.length;
+}
+
+export async function clearSnapshots(vehicleId?: string): Promise<void> {
+  if (vehicleId) {
+    const remaining = getWebSnapshots().filter((s) => s.vehicle_id && s.vehicle_id !== vehicleId);
+    saveWebSnapshots(remaining);
+  } else {
+    saveWebSnapshots([]);
+  }
+}
+
+export async function seedSampleData(nominalCapacityKwh: number = 60.0, vehicleId?: string): Promise<void> {
+  const vId = vehicleId || 'default_car';
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
   const sampleData: BatterySnapshot[] = [];
@@ -69,13 +103,14 @@ export async function seedSampleData(): Promise<void> {
     const timestamp = now - i * dayMs;
     const odometer_miles = 25000 - i * 35;
     const degradation_pct = 3.5 + (180 - i) * 0.012 + (Math.random() * 0.4 - 0.2);
-    const nominalFullCapacity = 75.0;
+    const nominalFullCapacity = nominalCapacityKwh;
     const calculated_capacity_kwh = nominalFullCapacity * (1 - degradation_pct / 100);
     const battery_level_pct = 75 + Math.round(Math.random() * 20);
     const rated_range_miles = (calculated_capacity_kwh / nominalFullCapacity) * 310 * (battery_level_pct / 100);
 
     sampleData.push({
       id: 180 - i + 1,
+      vehicle_id: vId,
       timestamp,
       odometer_miles,
       battery_level_pct,
@@ -87,5 +122,6 @@ export async function seedSampleData(): Promise<void> {
     });
   }
 
-  saveWebSnapshots(sampleData);
+  const existing = getWebSnapshots().filter((s) => s.vehicle_id !== vId);
+  saveWebSnapshots([...sampleData, ...existing]);
 }

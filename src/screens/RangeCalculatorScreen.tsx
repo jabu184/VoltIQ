@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { fetchServerVehicle, checkServerHealth } from '../services/apiClient';
+import { useFocusEffect } from 'expo-router';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
 import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
@@ -19,14 +20,15 @@ import { FooterVersion } from '../components/FooterVersion';
 import { HeaderStatusBadges } from '../components/HeaderStatusBadges';
 
 export const RangeCalculatorScreen: React.FC = () => {
-  const { selectedProfile } = useVehicleProfile();
+  const { activeVehicle, selectedProfile, isManualMode } = useVehicleProfile();
   const { unit, unitLabel, toDisplayDistance, fromInputDistance } = useUnit();
   const {
-    currencySubUnit,
     homeRate,
     superchargerRate,
     homePowerKw,
     superchargerPowerKw,
+    currencySymbol,
+    currencySubUnit,
     calcHomeCost,
     calcSuperchargerCost,
     formatCost,
@@ -46,26 +48,36 @@ export const RangeCalculatorScreen: React.FC = () => {
   const loadLatestStats = useCallback(async () => {
     setLoading(true);
     try {
-      const isOnline = await checkServerHealth();
-      if (isOnline) {
-        const data = await fetchServerVehicle();
-        if (data?.vehicle) {
-          const v = data.vehicle;
-          const snap = data.latestSnapshot;
-          const realSoc = typeof v.last_soc === 'number' && v.last_soc > 0 ? v.last_soc : (snap?.battery_level_pct || 80);
-          const realRange = typeof v.last_rated_range === 'number' && v.last_rated_range > 0 ? v.last_rated_range : (snap?.rated_range_miles || 234.4);
-
-          setCurrentSoc(realSoc);
-          setCurrentRatedRangeMiles(realRange);
-          setCarName(v.display_name || 'Tesla Model 3');
-          setVin(v.vin || 'LRW3F7FS3SC594594');
-        }
+      if (isManualMode) {
+        const mTel = activeVehicle.manualTelemetry;
+        const realSoc = mTel?.batteryLevelPct || 80;
+        const realRange = mTel?.ratedRangeMiles || 220.0;
+        setCurrentSoc(realSoc);
+        setCurrentRatedRangeMiles(realRange);
+        setCarName(activeVehicle.name || selectedProfile.name);
+        setVin(activeVehicle.vin || 'MANUAL-STORAGE');
       } else {
-        const snaps = await getSnapshots(1);
-        if (snaps.length > 0) {
-          const s = snaps[0];
-          setCurrentSoc(s.battery_level_pct);
-          setCurrentRatedRangeMiles(s.rated_range_miles);
+        const isOnline = await checkServerHealth();
+        if (isOnline) {
+          const data = await fetchServerVehicle();
+          if (data?.vehicle) {
+            const v = data.vehicle;
+            const snap = data.latestSnapshot;
+            const realSoc = typeof v.last_soc === 'number' && v.last_soc > 0 ? v.last_soc : (snap?.battery_level_pct || 80);
+            const realRange = typeof v.last_rated_range === 'number' && v.last_rated_range > 0 ? v.last_rated_range : (snap?.rated_range_miles || 234.4);
+
+            setCurrentSoc(realSoc);
+            setCurrentRatedRangeMiles(realRange);
+            setCarName(v.display_name || activeVehicle.name || 'Tesla Model 3');
+            setVin(v.vin || 'LRW3F7FS3SC594594');
+          }
+        } else {
+          const snaps = await getSnapshots(1, activeVehicle.id);
+          if (snaps.length > 0) {
+            const s = snaps[0];
+            setCurrentSoc(s.battery_level_pct);
+            setCurrentRatedRangeMiles(s.rated_range_miles);
+          }
         }
       }
     } catch (err) {
@@ -73,7 +85,13 @@ export const RangeCalculatorScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeVehicle, selectedProfile, isManualMode]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLatestStats();
+    }, [loadLatestStats])
+  );
 
   useEffect(() => {
     loadLatestStats();

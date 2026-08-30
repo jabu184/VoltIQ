@@ -23,84 +23,116 @@ import { fetchVehicleTelemetry, TeslaTelemetry } from '../services/teslaClient';
 import { generateAndShareCertificate } from '../services/pdfGenerator';
 import { checkServerHealth, fetchServerSnapshots, fetchServerVehicle } from '../services/apiClient';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
+import { useUnit } from '../context/UnitContext';
+import { useFocusEffect } from 'expo-router';
 import { FooterVersion } from '../components/FooterVersion';
 import { HeaderStatusBadges } from '../components/HeaderStatusBadges';
 
 export const BatteryHealthScreen: React.FC = () => {
   const { isPremium, unlockLifetimePremium, restorePurchases, priceLabel } = usePremium();
-  const { selectedProfile } = useVehicleProfile();
-  const [loading, setLoading] = useState<boolean>(true);
-  const [generatingPdf, setGeneratingPdf] = useState<boolean>(false);
+  const { activeVehicle, selectedProfile, isManualMode } = useVehicleProfile();
+  const { unitLabel, toDisplayDistance, fromInputDistance } = useUnit();
   const [snapshots, setSnapshots] = useState<BatterySnapshot[]>([]);
   const [metrics, setMetrics] = useState<BatteryHealthMetrics | null>(null);
   const [vehicle, setVehicle] = useState<TeslaTelemetry | null>(null);
-  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [generatingPdf, setGeneratingPdf] = useState<boolean>(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const serverHealth = await checkServerHealth();
-      let snaps: BatterySnapshot[] = [];
-      if (serverHealth) {
-        snaps = await fetchServerSnapshots(5000);
-        const serverVeh = await fetchServerVehicle();
-        if (serverVeh && serverVeh.vehicle) {
-          const veh = serverVeh.vehicle;
-          const snap = serverVeh.latestSnapshot || (snaps.length > 0 ? snaps[0] : null);
-          const realSoc = veh.last_soc && veh.last_soc !== 80 ? veh.last_soc : (snap?.battery_level_pct || veh.last_soc || 84);
-          const realRange = veh.last_rated_range && veh.last_rated_range !== 240 ? veh.last_rated_range : (snap?.rated_range_miles || veh.last_rated_range || 234.4);
-          const realOdo = veh.last_odometer && veh.last_odometer > 0 ? veh.last_odometer : (snap?.odometer_miles || veh.last_odometer || 4771.1);
-
-          setVehicle({
-            vin: veh.vin,
-            vehicleName: veh.display_name || 'Tesla Model 3',
-            batteryLevelPct: realSoc,
-            usableBatteryLevelPct: realSoc - 1,
-            ratedRangeMiles: realRange,
-            odometerMiles: realOdo,
-            isFastCharging: veh.last_charging_state === 'Charging',
-            chargerPowerKw: 0,
-            chargerVoltage: 0,
-            chargerActualCurrent: 0,
-            batteryHeaterOn: false,
-            insideTempC: 20,
-            outsideTempC: 15,
-            timestamp: Date.now(),
-          });
-
-          const liveReading = {
-            ratedRangeMiles: realRange,
-            batteryLevelPct: realSoc,
-            odometerMiles: realOdo,
-          };
-          const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
-          setMetrics(evaluated);
-        } else {
-          const evaluated = evaluateBatteryHealth(snaps, selectedProfile);
-          setMetrics(evaluated);
+      if (isManualMode) {
+        let snaps = await getSnapshots(2000, activeVehicle.id);
+        if (snaps.length === 0 && isPremium) {
+          const sSnaps = await fetchServerSnapshots(5000);
+          if (sSnaps.length > 0) {
+            snaps = sSnaps;
+          }
         }
-      } else {
-        snaps = await getSnapshots(2000);
-        const tel = await fetchVehicleTelemetry(false, selectedProfile.nominalCapacityKwh);
-        setVehicle(tel);
-        const liveReading = tel
-          ? { ratedRangeMiles: tel.ratedRangeMiles, batteryLevelPct: tel.batteryLevelPct, odometerMiles: tel.odometerMiles }
-          : undefined;
+        const mTel = activeVehicle.manualTelemetry;
+        const liveReading = mTel
+          ? {
+              ratedRangeMiles: mTel.ratedRangeMiles,
+              batteryLevelPct: mTel.batteryLevelPct,
+              odometerMiles: mTel.odometerMiles,
+            }
+          : (snaps.length > 0
+              ? {
+                  ratedRangeMiles: snaps[0].rated_range_miles,
+                  batteryLevelPct: snaps[0].battery_level_pct,
+                  odometerMiles: snaps[0].odometer_miles,
+                }
+              : undefined);
         const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
         setMetrics(evaluated);
+        setSnapshots(snaps);
+      } else {
+        const serverHealth = await checkServerHealth();
+        let snaps: BatterySnapshot[] = [];
+        if (serverHealth) {
+          snaps = await fetchServerSnapshots(5000);
+          const serverVeh = await fetchServerVehicle();
+          if (serverVeh && serverVeh.vehicle) {
+            const veh = serverVeh.vehicle;
+            const snap = serverVeh.latestSnapshot || (snaps.length > 0 ? snaps[0] : null);
+            const realSoc = veh.last_soc && veh.last_soc !== 80 ? veh.last_soc : (snap?.battery_level_pct || veh.last_soc || 84);
+            const realRange = veh.last_rated_range && veh.last_rated_range !== 240 ? veh.last_rated_range : (snap?.rated_range_miles || veh.last_rated_range || 234.4);
+            const realOdo = veh.last_odometer && veh.last_odometer > 0 ? veh.last_odometer : (snap?.odometer_miles || veh.last_odometer || 4771.1);
+
+            setVehicle({
+              vin: veh.vin,
+              vehicleName: veh.display_name || activeVehicle.name || 'Tesla Model 3',
+              batteryLevelPct: realSoc,
+              usableBatteryLevelPct: realSoc - 1,
+              ratedRangeMiles: realRange,
+              odometerMiles: realOdo,
+              isFastCharging: veh.last_charging_state === 'Charging',
+              chargerPowerKw: 0,
+              chargerVoltage: 0,
+              chargerActualCurrent: 0,
+              batteryHeaterOn: false,
+              insideTempC: 20,
+              outsideTempC: 15,
+              timestamp: Date.now(),
+            });
+
+            const liveReading = {
+              ratedRangeMiles: realRange,
+              batteryLevelPct: realSoc,
+              odometerMiles: realOdo,
+            };
+            const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
+            setMetrics(evaluated);
+          } else {
+            const evaluated = evaluateBatteryHealth(snaps, selectedProfile);
+            setMetrics(evaluated);
+          }
+        } else {
+          snaps = await getSnapshots(2000, activeVehicle.id);
+          const tel = await fetchVehicleTelemetry(false, selectedProfile.nominalCapacityKwh);
+          setVehicle(tel);
+          const liveReading = tel
+            ? { ratedRangeMiles: tel.ratedRangeMiles, batteryLevelPct: tel.batteryLevelPct, odometerMiles: tel.odometerMiles }
+            : undefined;
+          const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
+          setMetrics(evaluated);
+        }
+        setSnapshots(snaps);
       }
-      setSnapshots(snaps);
     } catch (err) {
       console.warn('Error loading health data:', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedProfile]);
+  }, [activeVehicle, selectedProfile, isManualMode]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleExportCertificate = async () => {
     if (!isPremium) {
@@ -189,6 +221,15 @@ export const BatteryHealthScreen: React.FC = () => {
         snapshots={snapshots}
         isPremium={isPremium}
         onUnlockPress={() => setShowPaywall(true)}
+        onSnapshotUpdated={loadData}
+        onSnapshotDeleted={loadData}
+        vehicleProfile={selectedProfile}
+        vehicleId={activeVehicle.id}
+        isManualMode={isManualMode}
+        unitLabel={unitLabel}
+        toDisplayDistance={toDisplayDistance}
+        fromInputDistance={fromInputDistance}
+        priceLabel={priceLabel}
       />
 
       {/* Diagnostic Metrics */}
@@ -210,31 +251,6 @@ export const BatteryHealthScreen: React.FC = () => {
             <Text style={styles.statSub}>Estimated pack degradation</Text>
           </View>
           <Text style={styles.statValue}>{metrics?.degradationPct}%</Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.statRow}>
-          <View>
-            <Text style={styles.statLabel}>Cell Balance Deviation</Text>
-            <Text style={styles.statSub}>Max cell voltage differential</Text>
-          </View>
-          <View style={styles.statBadgeCol}>
-            <Text style={styles.statValue}>{metrics?.cellBalanceDeviationMv} mV</Text>
-            <Text style={styles.statStatus}>{metrics?.cellBalanceStatus}</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.statRow}>
-          <View>
-            <Text style={styles.statLabel}>Charging Profile Ratio</Text>
-            <Text style={styles.statSub}>AC (Home) vs DC (Supercharger)</Text>
-          </View>
-          <Text style={styles.statValue}>
-            {metrics?.acRatioPct}% AC / {metrics?.dcRatioPct}% DC
-          </Text>
         </View>
 
         <View style={styles.divider} />
@@ -271,7 +287,7 @@ export const BatteryHealthScreen: React.FC = () => {
           <Text style={styles.certTitle}>AutoTrader / eBay Resale Certificate</Text>
           <Text style={styles.certDescription}>
             Generate an official verifiable PDF certificate demonstrating your battery health,
-            measured degradation rate, and low-wear AC charging ratio to prospective buyers.
+            measured degradation rate, and usable capacity to prospective buyers.
           </Text>
         </View>
 
@@ -311,7 +327,7 @@ export const BatteryHealthScreen: React.FC = () => {
               </View>
               <View style={styles.featureItem}>
                 <Text style={styles.featureCheck}>✓</Text>
-                <Text style={styles.featureText}>Detailed Cell Balance & AC vs DC wear diagnostics</Text>
+                <Text style={styles.featureText}>Detailed battery pack health & capacity degradation analytics</Text>
               </View>
               <View style={styles.featureItem}>
                 <Text style={styles.featureCheck}>✓</Text>

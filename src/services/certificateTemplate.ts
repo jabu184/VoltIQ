@@ -234,24 +234,6 @@ export function buildCertificateHtml(data: CertificateData): string {
           <td><strong>${metrics.batteryHealthPct >= 90 ? 'Healthy' : 'Fair'}</strong></td>
         </tr>
         <tr>
-          <td>Cell Balance Deviation</td>
-          <td>${metrics.cellBalanceDeviationMv} mV</td>
-          <td>&lt; 15.0 mV</td>
-          <td><strong>${metrics.cellBalanceStatus}</strong></td>
-        </tr>
-        <tr>
-          <td>Home/Slow Charging Ratio (AC)</td>
-          <td>${metrics.acRatioPct}%</td>
-          <td>&gt; 70% recommended</td>
-          <td><strong>${metrics.acRatioPct >= 70 ? 'Ideal' : 'Heavy DC usage'}</strong></td>
-        </tr>
-        <tr>
-          <td>DC Fast Charging Ratio (Supercharger)</td>
-          <td>${metrics.dcRatioPct}%</td>
-          <td>&lt; 30% recommended</td>
-          <td><strong>${metrics.dcRatioPct <= 30 ? 'Low Wear' : 'High Wear'}</strong></td>
-        </tr>
-        <tr>
           <td>Measured Degradation Rate</td>
           <td>${(metrics.degradationPct / (vehicle.odometerMiles / 10000)).toFixed(2)}% per 10k miles</td>
           <td>&lt; 1.5% per 10k miles</td>

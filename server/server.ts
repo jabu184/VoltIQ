@@ -7,7 +7,7 @@ import * as url from 'node:url';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData, clearTokens } from './db';
+import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, updateSnapshot, deleteSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData, clearTokens } from './db';
 import { TeslaFleetService } from './teslaFleetService';
 import { SmartPoller } from './poller';
 
@@ -280,6 +280,26 @@ const server = http.createServer(async (req, res) => {
         count: snapshots.length,
         snapshots,
       });
+    }
+
+    // 5b. Update individual snapshot
+    if ((pathname === '/api/snapshots/update' || pathname === '/api/snapshot/update') && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      if (!body.id) {
+        return sendJson(res, 400, { error: 'Missing snapshot ID.' });
+      }
+      const success = updateSnapshot(Number(body.id), body);
+      return sendJson(res, 200, { success });
+    }
+
+    // 5c. Delete individual snapshot
+    if ((pathname === '/api/snapshots/delete' || pathname === '/api/snapshot/delete') && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      if (!body.id) {
+        return sendJson(res, 400, { error: 'Missing snapshot ID.' });
+      }
+      const success = deleteSnapshot(Number(body.id));
+      return sendJson(res, 200, { success });
     }
 
     // 6. Force immediate sync

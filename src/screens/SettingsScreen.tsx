@@ -30,15 +30,24 @@ import {
   clearServerDatabase,
   ServerHealth,
   fetchServerVehicle,
+  fetchServerSnapshots,
   disconnectServerTeslaAccount,
 } from '../services/apiClient';
-import { useVehicleProfile } from '../context/VehicleProfileContext';
+import { useVehicleProfile, VehicleConfig } from '../context/VehicleProfileContext';
 import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
+import { useFocusEffect } from 'expo-router';
 
 export const SettingsScreen: React.FC = () => {
-  const { isPremium, toggleMockPremium, priceLabel } = usePremium();
-  const { unit, setUnit } = useUnit();
+  const { isPremium, unlockLifetimePremium, restorePurchases, priceLabel } = usePremium();
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const {
+    unit,
+    setUnit,
+    efficiencyUnit,
+    setEfficiencyUnit,
+    efficiencyLabel,
+  } = useUnit();
   const {
     currency,
     currencySubUnit,
@@ -74,18 +83,36 @@ export const SettingsScreen: React.FC = () => {
     setScKwInput(String(superchargerPowerKw));
   }, [superchargerPowerKw]);
 
-  const { selectedProfile, setSelectedProfile, selectProfileById, updateCustomProfile } = useVehicleProfile();
-  const selectedProfileIndex = Math.max(0, TESLA_PROFILES.findIndex((p) => p.id === selectedProfile.id));
+  const {
+    vehicles,
+    activeVehicle,
+    selectedProfile,
+    isManualMode,
+    setActiveVehicleId,
+    addVehicle,
+    updateActiveVehicle,
+    deleteVehicle,
+    setSelectedProfile,
+    selectProfileById,
+    updateCustomProfile,
+  } = useVehicleProfile();
+
+  const [showVehicleModal, setShowVehicleModal] = useState<boolean>(false);
+  const [showAddCarModal, setShowAddCarModal] = useState<boolean>(false);
+  const [newCarName, setNewCarName] = useState<string>('');
+  const [newCarProfileId, setNewCarProfileId] = useState<string>(TESLA_PROFILES[0].id);
+  const [newCarIsPaired, setNewCarIsPaired] = useState<boolean>(false);
+
   const [showModelDropdown, setShowModelDropdown] = useState<boolean>(false);
-  const [customNameInput, setCustomNameInput] = useState<string>(selectedProfile.name);
+  const [customNameInput, setCustomNameInput] = useState<string>(activeVehicle.name);
   const [customCapacityInput, setCustomCapacityInput] = useState<string>(String(selectedProfile.nominalCapacityKwh));
   const [customWhMiInput, setCustomWhMiInput] = useState<string>(String(selectedProfile.whPerMile));
 
   useEffect(() => {
-    setCustomNameInput(selectedProfile.name);
+    setCustomNameInput(activeVehicle.name);
     setCustomCapacityInput(String(selectedProfile.nominalCapacityKwh));
     setCustomWhMiInput(String(selectedProfile.whPerMile));
-  }, [selectedProfile]);
+  }, [activeVehicle, selectedProfile]);
 
   const [tokenInput, setTokenInput] = useState<string>('');
   const [hasSavedToken, setHasSavedToken] = useState<boolean>(false);
@@ -98,11 +125,33 @@ export const SettingsScreen: React.FC = () => {
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      checkToken();
+    }, [activeVehicle.id, activeVehicle.isPaired, isManualMode])
+  );
+
   const checkToken = async () => {
     const health = await checkServerHealth();
     setServerHealth(health);
 
-    const token = await getTeslaRefreshToken();
+    if (isManualMode || !activeVehicle.isPaired) {
+      let snaps = await getSnapshots(2000, activeVehicle.id);
+      if (snaps.length === 0 && isPremium && health) {
+        const sSnaps = await fetchServerSnapshots(5000);
+        if (sSnaps.length > 0) {
+          snaps = sSnaps;
+        }
+      }
+      setSnapshotCount(snaps.length);
+      setHasSavedToken(false);
+      setTokenInput('');
+      setConnectedVehicleName('');
+      setConnectedVin('');
+      return;
+    }
+
+    const token = await getTeslaRefreshToken(activeVehicle.id);
     const serverVehicleData = await fetchServerVehicle();
 
     const serverLinked = !!serverVehicleData?.isAccountLinked;
@@ -112,7 +161,7 @@ export const SettingsScreen: React.FC = () => {
     setHasSavedToken(isConnected);
 
     if (serverVehicleData?.vehicle) {
-      setConnectedVehicleName(serverVehicleData.vehicle.display_name || 'Tesla Model 3');
+      setConnectedVehicleName(serverVehicleData.vehicle.display_name || activeVehicle.name || 'Tesla Model 3');
       setConnectedVin(serverVehicleData.vehicle.vin || '');
     }
 
@@ -125,14 +174,14 @@ export const SettingsScreen: React.FC = () => {
     if (health) {
       setSnapshotCount(health.snapshotCount);
     } else {
-      const snaps = await getSnapshots(500);
+      const snaps = await getSnapshots(500, activeVehicle.id);
       setSnapshotCount(snaps.length);
     }
   };
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.alert(`${title}\n\n${message}`);
+      window.alert(`${title}\\n\\n${message}`);
     } else {
       Alert.alert(title, message);
     }
@@ -146,7 +195,7 @@ export const SettingsScreen: React.FC = () => {
       setSnapshotCount(health.snapshotCount);
       showAlert(
         'Server Connected! 🟢',
-        `VoltIQ Backend is active.\nUptime: ${health.uptimeSeconds}s\nSnapshots in Server DB: ${health.snapshotCount}\nSmart Poller: Active`
+        `VoltIQ Backend is active.\\nUptime: ${health.uptimeSeconds}s\\nSnapshots in Server DB: ${health.snapshotCount}\\nSmart Poller: Active`
       );
     } else {
       showAlert(
@@ -158,28 +207,30 @@ export const SettingsScreen: React.FC = () => {
 
   useEffect(() => {
     checkToken();
-  }, []);
+  }, [activeVehicle.id, activeVehicle.isPaired, isManualMode]);
 
   const handleSaveToken = async () => {
     if (!tokenInput.trim()) {
       Alert.alert('Empty Token', 'Please enter a valid Tesla refresh token.');
       return;
     }
-    await saveTeslaRefreshToken(tokenInput);
+    await saveTeslaRefreshToken(tokenInput, activeVehicle.id);
+    await updateActiveVehicle({ isPaired: true });
     setHasSavedToken(true);
-    Alert.alert('Saved', 'Your Tesla refresh token is securely stored in on-device Keychain/KeyStore.');
+    showAlert('Saved', 'Your Tesla refresh token is securely stored on-device for this vehicle.');
   };
 
   const handleLogoutTesla = async () => {
     const doLogout = async () => {
       await disconnectServerTeslaAccount();
-      await clearTeslaCredentials();
+      await clearTeslaCredentials(activeVehicle.id);
+      await updateActiveVehicle({ isPaired: false });
       setTokenInput('');
       setHasSavedToken(false);
       setConnectedVehicleName('');
       setConnectedVin('');
       await checkToken();
-      showAlert('Tesla Account Disconnected', 'Your Tesla account has been unlinked.');
+      showAlert('Tesla Account Disconnected', 'Tesla account unlinked for this vehicle.');
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -198,29 +249,27 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handleClearToken = async () => {
-    await handleLogoutTesla();
-  };
-
   const handleClearDatabase = async () => {
     const doClear = async () => {
-      await clearSnapshots();
-      await clearServerDatabase();
+      await clearSnapshots(activeVehicle.id);
+      if (!isManualMode) {
+        await clearServerDatabase();
+      }
       setSnapshotCount(0);
       const health = await checkServerHealth();
       setServerHealth(health);
-      showAlert('Database Cleared 🗑️ï¸', 'All local and server battery snapshots have been deleted.');
+      showAlert('Database Cleared 🗑️', 'Historical snapshot records for this vehicle have been deleted.');
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.confirm('Clear all battery snapshots and historical records from database?')) {
+      if (window.confirm('Clear battery snapshots and records for this vehicle?')) {
         await doClear();
       }
     } else {
-      Alert.alert('Confirm Clear Database', 'Clear all battery snapshots from both your phone and the server database?', [
+      Alert.alert('Confirm Clear Database', 'Clear all battery snapshots for this vehicle?', [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Erase All Data',
+          text: 'Erase Vehicle Data',
           style: 'destructive',
           onPress: doClear,
         },
@@ -229,9 +278,9 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleSeedData = async () => {
-    const prof = TESLA_PROFILES[selectedProfileIndex];
+    const prof = selectedProfile;
     await seedSampleData(prof.nominalCapacityKwh);
-    const snaps = await getSnapshots(500);
+    const snaps = await getSnapshots(500, activeVehicle.id);
     setSnapshotCount(snaps.length);
     Alert.alert('Populated', `Added sample snapshots for ${prof.name}.`);
   };
@@ -240,6 +289,43 @@ export const SettingsScreen: React.FC = () => {
     setRefreshing(true);
     await checkToken();
     setRefreshing(false);
+  };
+
+  const handleCreateNewCar = async () => {
+    if (newCarIsPaired && !isPremium) {
+      setShowAddCarModal(false);
+      setShowPaywall(true);
+      return;
+    }
+    const prof = TESLA_PROFILES.find((p) => p.id === newCarProfileId) || TESLA_PROFILES[0];
+    const name = newCarName.trim() || prof.name;
+    await addVehicle(name, prof, newCarIsPaired);
+    setNewCarName('');
+    setShowAddCarModal(false);
+    showAlert('Vehicle Added', `Added ${name} in ${newCarIsPaired ? 'Paired' : 'Manual'} mode.`);
+  };
+
+  const handleDeleteActiveCar = async () => {
+    if (vehicles.length <= 1) {
+      showAlert('Cannot Delete', 'You must have at least one vehicle.');
+      return;
+    }
+
+    const doDelete = async () => {
+      await deleteVehicle(activeVehicle.id);
+      showAlert('Vehicle Removed', `Deleted ${activeVehicle.name}.`);
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`Are you sure you want to delete ${activeVehicle.name}?`)) {
+        await doDelete();
+      }
+    } else {
+      Alert.alert('Delete Vehicle', `Are you sure you want to delete ${activeVehicle.name}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
   };
 
   return (
@@ -259,20 +345,184 @@ export const SettingsScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.screenTitle}>Settings</Text>
-          <Text style={styles.screenSubtitle}>Credentials, pack profile & storage</Text>
+          <Text style={styles.screenSubtitle}>Vehicles, credentials & pack profiles</Text>
         </View>
-        <HeaderStatusBadges />
+        <HeaderStatusBadges isManual={isManualMode} isPaired={hasSavedToken} />
       </View>
 
-      {/* Vehicle Profile Selection & Custom Pack */}
-      <Text style={styles.sectionHeader}>Vehicle & Battery Pack</Text>
+      {/* --- TOP ACTIVE VEHICLE SELECTOR --- */}
+      <Text style={styles.sectionHeader}>Active Vehicle</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>Selected Garage Vehicle</Text>
+        <Text style={styles.subText}>
+          Switch active vehicle or add multiple cars (manual or Tesla-paired).
+        </Text>
+
+        <TouchableOpacity
+          style={styles.vehicleSelectorBtn}
+          onPress={() => setShowVehicleModal(true)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={styles.vehicleBtnHeaderRow}>
+              <Text style={styles.vehicleBtnName}>{activeVehicle.name}</Text>
+              <View
+                style={[
+                  styles.vehicleModeBadge,
+                  activeVehicle.isPaired ? styles.badgePaired : styles.badgeManual,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.vehicleModeBadgeText,
+                    activeVehicle.isPaired ? styles.textPaired : styles.textManual,
+                  ]}
+                >
+                  {activeVehicle.isPaired ? '● PAIRED' : '● MANUAL'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.dropdownSubText}>
+              {selectedProfile.nominalCapacityKwh} kWh &bull; ~{selectedProfile.whPerMile} Wh/mi ({vehicles.length} vehicle{vehicles.length > 1 ? 's' : ''} saved)
+            </Text>
+          </View>
+          <Text style={styles.dropdownArrow}>▼</Text>
+        </TouchableOpacity>
+
+        {/* Mode Switch for Active Vehicle */}
+        <View style={styles.packDivider} />
+        <View style={styles.modeToggleRow}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.modeToggleTitle}>Tesla Fleet Paired Mode</Text>
+            <Text style={styles.modeToggleSub}>
+              {activeVehicle.isPaired
+                ? 'Enabled — 24/7 Tesla API telemetry sync and cloud database storage.'
+                : 'Disabled — Vehicle is in Manual Mode using local phone storage.'}
+            </Text>
+          </View>
+          <Switch
+            value={activeVehicle.isPaired}
+            onValueChange={(val) => {
+              if (val && !isPremium) {
+                setShowPaywall(true);
+                return;
+              }
+              updateActiveVehicle({ isPaired: val });
+            }}
+            trackColor={{ false: '#64748b', true: '#0284c7' }}
+            thumbColor={activeVehicle.isPaired ? '#38bdf8' : '#cbd5e1'}
+          />
+        </View>
+
+        {vehicles.length > 1 && (
+          <TouchableOpacity
+            style={styles.deleteVehicleBtn}
+            onPress={handleDeleteActiveCar}
+          >
+            <Text style={styles.deleteVehicleBtnText}>🗑️ Delete This Vehicle</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* --- PREMIUM UPGRADE BANNER (When on Free / Manual tier) --- */}
+      {!isPremium && (
+        <TouchableOpacity
+          style={styles.premiumUnlockCard}
+          onPress={() => setShowPaywall(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumUnlockHeader}>
+            <Text style={styles.premiumUnlockIcon}>⚡</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.premiumUnlockTitle}>Unlock Tesla Fleet 24/7 Sync & Cloud DB</Text>
+              <Text style={styles.premiumUnlockSub}>
+                Upgrade to TrueBattery Premium ({priceLabel}) to enable automatic 24/7 background telemetry logging, server database storage, and historical degradation curves.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.premiumUnlockAction}>
+            <Text style={styles.premiumUnlockActionText}>Unlock Lifetime Access ({priceLabel}) →</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* --- TESLA ACCOUNT & FLEET API (Only when Paired Mode is enabled) --- */}
+      {activeVehicle.isPaired && isPremium && (
+        <>
+          <Text style={styles.sectionHeader}>Tesla Account & Fleet API</Text>
+          <View style={styles.card}>
+            <View style={styles.accountHeaderRow}>
+              <View style={styles.accountHeaderLeft}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    hasSavedToken ? styles.statusDotConnected : styles.statusDotDisconnected,
+                  ]}
+                />
+                <Text style={styles.accountStatusTitle}>
+                  {hasSavedToken ? 'Tesla Account Linked' : 'Not Connected'}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.accountBadge,
+                  hasSavedToken ? styles.accountBadgeConnected : styles.accountBadgeDisconnected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.accountBadgeText,
+                    hasSavedToken ? styles.accountBadgeTextConnected : styles.accountBadgeTextDisconnected,
+                  ]}
+                >
+                  {hasSavedToken ? 'CONNECTED' : 'DISCONNECTED'}
+                </Text>
+              </View>
+            </View>
+
+            {hasSavedToken ? (
+              <View style={styles.connectedBox}>
+                <Text style={styles.connectedLabel}>Linked Vehicle</Text>
+                <Text style={styles.connectedValue}>
+                  {connectedVehicleName || activeVehicle.name || 'Tesla Model 3'}
+                </Text>
+                {connectedVin ? (
+                  <Text style={styles.connectedVin}>VIN: {connectedVin}</Text>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.logoutBtn}
+                  onPress={handleLogoutTesla}
+                >
+                  <Text style={styles.logoutBtnText}>Disconnect & Logout</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.subText}>
+                  Connect your Tesla account to enable automated background telemetry polling and real-time charging insights.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.loginBtn}
+                  onPress={() => setShowLoginModal(true)}
+                >
+                  <Text style={styles.loginBtnText}>⚡ Sign In with Tesla</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </>
+      )}
+
+      {/* --- VEHICLE & BATTERY PACK SPECS --- */}
+      <Text style={styles.sectionHeader}>Vehicle & Battery Pack Specs</Text>
       <View style={styles.card}>
         <Text style={styles.label}>Tesla Model Preset</Text>
         <Text style={styles.subText}>
           Choose a preset model from the dropdown to auto-fill specs.
         </Text>
 
-        {/* Dropdown Selector Button */}
         <TouchableOpacity
           style={styles.dropdownBtn}
           onPress={() => setShowModelDropdown(true)}
@@ -302,6 +552,7 @@ export const SettingsScreen: React.FC = () => {
               value={customNameInput}
               onChangeText={(t) => {
                 setCustomNameInput(t);
+                updateActiveVehicle({ name: t });
                 updateCustomProfile({ name: t });
               }}
               placeholder="Tesla Model Name"
@@ -334,7 +585,7 @@ export const SettingsScreen: React.FC = () => {
           </View>
 
           <View style={styles.tariffCol}>
-            <Text style={styles.tariffFieldLabel}>Rated Efficiency</Text>
+            <Text style={styles.tariffFieldLabel}>Rated Consumption</Text>
             <View style={styles.tariffInputBox}>
               <TextInput
                 style={styles.tariffInput}
@@ -352,134 +603,104 @@ export const SettingsScreen: React.FC = () => {
               />
               <Text style={styles.tariffUnitText}>Wh/mi</Text>
             </View>
-            <Text style={styles.tariffSubtext}>EPA / WLTP rating</Text>
+            <Text style={styles.tariffSubtext}>EPA benchmark</Text>
           </View>
         </View>
       </View>
 
-      {/* Model Selection Dropdown Modal */}
-      <Modal
-        visible={showModelDropdown}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowModelDropdown(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowModelDropdown(false)}
-        >
-          <View style={styles.dropdownModalContent}>
-            <Text style={styles.dropdownModalTitle}>Select Tesla Model</Text>
-            <ScrollView style={{ maxHeight: 380 }}>
-              {TESLA_PROFILES.map((p) => {
-                const isSelected = selectedProfile.id === p.id;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[styles.dropdownModalItem, isSelected && styles.dropdownModalItemSelected]}
-                    onPress={async () => {
-                      await selectProfileById(p.id);
-                      setCustomNameInput(p.name);
-                      setCustomCapacityInput(String(p.nominalCapacityKwh));
-                      setCustomWhMiInput(String(p.whPerMile));
-                      setShowModelDropdown(false);
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.dropdownItemName, isSelected && styles.dropdownItemNameSelected]}>
-                        {p.name}
-                      </Text>
-                      <Text style={styles.dropdownItemSub}>
-                        {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
-                      </Text>
-                    </View>
-                    {isSelected && <Text style={styles.dropdownCheck}>✓</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            <TouchableOpacity
-              style={styles.dropdownCloseBtn}
-              onPress={() => setShowModelDropdown(false)}
-            >
-              <Text style={styles.dropdownCloseBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Units & Measurement */}
-      <Text style={styles.sectionHeader}>Units & Measurement</Text>
+      {/* --- DISPLAY & UNIT PREFERENCES --- */}
+      <Text style={styles.sectionHeader}>Display & Units</Text>
       <View style={styles.card}>
-        <Text style={styles.label}>Distance & Range Unit</Text>
-        <Text style={styles.subText}>Select whether distances and range are displayed in miles or kilometers.</Text>
-
-        <View style={styles.unitToggleRow}>
+        <Text style={styles.label}>Distance Unit</Text>
+        <Text style={styles.subText}>
+          Choose your preferred measurement unit for range and odometer.
+        </Text>
+        <View style={styles.unitToggleContainer}>
           <TouchableOpacity
-            style={[styles.unitToggleBtn, unit === 'miles' && styles.unitToggleBtnActive]}
+            style={[styles.unitButton, unit === 'miles' && styles.unitButtonActive]}
             onPress={() => setUnit('miles')}
           >
-            <Text style={[styles.unitToggleText, unit === 'miles' && styles.unitToggleTextActive]}>
+            <Text style={[styles.unitButtonText, unit === 'miles' && styles.unitButtonTextActive]}>
               Miles (mi)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.unitToggleBtn, unit === 'km' && styles.unitToggleBtnActive]}
+            style={[styles.unitButton, unit === 'km' && styles.unitButtonActive]}
             onPress={() => setUnit('km')}
           >
-            <Text style={[styles.unitToggleText, unit === 'km' && styles.unitToggleTextActive]}>
+            <Text style={[styles.unitButtonText, unit === 'km' && styles.unitButtonTextActive]}>
               Kilometers (km)
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Currency Selection */}
-      <Text style={styles.sectionHeader}>Currency & Pricing</Text>
-      <View style={styles.card}>
-        <Text style={styles.label}>Preferred Currency</Text>
+        <View style={styles.packDivider} />
+
+        <Text style={[styles.label, { marginTop: 10 }]}>Efficiency Display Unit</Text>
         <Text style={styles.subText}>
-          Choose your currency for charging costs and tariff calculations.
+          Choose how vehicle energy efficiency is displayed across the app.
         </Text>
-        <View style={styles.currencyToggleRow}>
+        <View style={styles.unitToggleContainer}>
           <TouchableOpacity
-            style={[styles.currencyBtn, currency === 'GBP' && styles.currencyBtnActive]}
-            onPress={() => setCurrency('GBP')}
+            style={[
+              styles.unitButton,
+              efficiencyUnit === 'distance_per_kwh' && styles.unitButtonActive,
+            ]}
+            onPress={() => setEfficiencyUnit('distance_per_kwh')}
           >
-            <Text style={[styles.currencyBtnText, currency === 'GBP' && styles.currencyBtnTextActive]}>
-              Pounds (£)
+            <Text
+              style={[
+                styles.unitButtonText,
+                efficiencyUnit === 'distance_per_kwh' && styles.unitButtonTextActive,
+              ]}
+            >
+              {unit === 'km' ? 'km/kWh' : 'mi/kWh'} (Distance/kWh)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
-            onPress={() => setCurrency('USD')}
+            style={[
+              styles.unitButton,
+              efficiencyUnit === 'energy_per_distance' && styles.unitButtonActive,
+            ]}
+            onPress={() => setEfficiencyUnit('energy_per_distance')}
           >
-            <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
-              Dollars ($)
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.currencyBtn, currency === 'EUR' && styles.currencyBtnActive]}
-            onPress={() => setCurrency('EUR')}
-          >
-            <Text style={[styles.currencyBtnText, currency === 'EUR' && styles.currencyBtnTextActive]}>
-              Euros (€)
+            <Text
+              style={[
+                styles.unitButtonText,
+                efficiencyUnit === 'energy_per_distance' && styles.unitButtonTextActive,
+              ]}
+            >
+              {unit === 'km' ? 'Wh/km' : 'Wh/mi'} (Energy/Distance)
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Charging Rates & Power (kW) */}
-      <Text style={styles.sectionHeader}>Charging Rates & Power (kW)</Text>
+      {/* --- ELECTRICITY TARIFFS --- */}
+      <Text style={styles.sectionHeader}>Electricity Tariffs & Charging Costs</Text>
       <View style={styles.card}>
-        <Text style={styles.label}>Home AC Charging</Text>
-        <Text style={styles.subText}>
-          Configure your home electricity rate and wallbox power speed.
-        </Text>
+        <Text style={styles.label}>Currency</Text>
+        <Text style={styles.subText}>Used for trip costs and charge estimations.</Text>
+        <View style={styles.currencyToggleRow}>
+          {(['GBP', 'USD', 'EUR'] as const).map((currCode) => {
+            const sym = currCode === 'GBP' ? '£' : currCode === 'USD' ? '$' : '€';
+            return (
+              <TouchableOpacity
+                key={currCode}
+                style={[styles.currencyBtn, currency === currCode && styles.currencyBtnActive]}
+                onPress={() => setCurrency(currCode)}
+              >
+                <Text style={[styles.currencyBtnText, currency === currCode && styles.currencyBtnTextActive]}>
+                  {sym} {currCode}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.tariffRow}>
           <View style={styles.tariffCol}>
-            <Text style={styles.tariffFieldLabel}>Electricity Rate</Text>
+            <Text style={styles.tariffFieldLabel}>Home Off-Peak Tariff</Text>
             <View style={styles.tariffInputBox}>
               <TextInput
                 style={styles.tariffInput}
@@ -487,47 +708,19 @@ export const SettingsScreen: React.FC = () => {
                 onChangeText={(t) => {
                   setHomeRateInput(t);
                   const num = parseFloat(t);
-                  if (!isNaN(num)) setHomeRate(num);
+                  if (!isNaN(num) && num >= 0) setHomeRate(num);
                 }}
                 keyboardType="numeric"
-                placeholder="7"
+                placeholder="7.5"
                 placeholderTextColor="#64748b"
               />
-              <Text style={styles.tariffUnitText}>{currencySubUnit} / kWh</Text>
+              <Text style={styles.tariffUnitText}>{currencySubUnit}/kWh</Text>
             </View>
-            <Text style={styles.tariffSubtext}>e.g. 7{currencySubUnit} (EV overnight)</Text>
+            <Text style={styles.tariffSubtext}>e.g. Octopus EV Night</Text>
           </View>
 
           <View style={styles.tariffCol}>
-            <Text style={styles.tariffFieldLabel}>Power Speed</Text>
-            <View style={styles.tariffInputBox}>
-              <TextInput
-                style={styles.tariffInput}
-                value={homeKwInput}
-                onChangeText={(t) => {
-                  setHomeKwInput(t);
-                  const num = parseFloat(t);
-                  if (!isNaN(num)) setHomePowerKw(num);
-                }}
-                keyboardType="numeric"
-                placeholder="7.0"
-                placeholderTextColor="#64748b"
-              />
-              <Text style={styles.tariffUnitText}>kW</Text>
-            </View>
-            <Text style={styles.tariffSubtext}>e.g. 7.0 kW (wallbox)</Text>
-          </View>
-        </View>
-
-        <View style={{ height: 1, backgroundColor: 'rgba(255, 255, 255, 0.08)', marginVertical: 14 }} />
-
-        <Text style={styles.label}>Tesla Supercharger</Text>
-        <Text style={styles.subText}>
-          Configure Supercharger rate and peak power speed.
-        </Text>
-        <View style={styles.tariffRow}>
-          <View style={styles.tariffCol}>
-            <Text style={styles.tariffFieldLabel}>Supercharging Rate</Text>
+            <Text style={styles.tariffFieldLabel}>Supercharger Tariff</Text>
             <View style={styles.tariffInputBox}>
               <TextInput
                 style={styles.tariffInput}
@@ -535,201 +728,315 @@ export const SettingsScreen: React.FC = () => {
                 onChangeText={(t) => {
                   setScRateInput(t);
                   const num = parseFloat(t);
-                  if (!isNaN(num)) setSuperchargerRate(num);
+                  if (!isNaN(num) && num >= 0) setSuperchargerRate(num);
                 }}
                 keyboardType="numeric"
-                placeholder="45"
+                placeholder="42"
                 placeholderTextColor="#64748b"
               />
-              <Text style={styles.tariffUnitText}>{currencySubUnit} / kWh</Text>
+              <Text style={styles.tariffUnitText}>{currencySubUnit}/kWh</Text>
             </View>
-            <Text style={styles.tariffSubtext}>e.g. 45{currencySubUnit} (Supercharger)</Text>
-          </View>
-
-          <View style={styles.tariffCol}>
-            <Text style={styles.tariffFieldLabel}>Power Speed</Text>
-            <View style={styles.tariffInputBox}>
-              <TextInput
-                style={styles.tariffInput}
-                value={scKwInput}
-                onChangeText={(t) => {
-                  setScKwInput(t);
-                  const num = parseFloat(t);
-                  if (!isNaN(num)) setSuperchargerPowerKw(num);
-                }}
-                keyboardType="numeric"
-                placeholder="150"
-                placeholderTextColor="#64748b"
-              />
-              <Text style={styles.tariffUnitText}>kW</Text>
-            </View>
-            <Text style={styles.tariffSubtext}>e.g. 150 kW (V2 / V3)</Text>
+            <Text style={styles.tariffSubtext}>DC Fast Charging</Text>
           </View>
         </View>
       </View>
 
-      {/* Tesla Account & Credentials */}
-      <Text style={styles.sectionHeader}>Tesla Account & Credentials</Text>
+      {/* --- DATA STORAGE & MANAGEMENT --- */}
+      <Text style={styles.sectionHeader}>Data Storage & Diagnostics</Text>
       <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <Text style={styles.label}>Connection Status</Text>
-          <View style={[styles.statusBadge, hasSavedToken ? styles.statusLive : styles.statusDemo]}>
-            <Text style={styles.statusBadgeText}>
-              {hasSavedToken ? '● PAIRED' : '○ UNPAIRED'}
-            </Text>
-          </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Historical Snapshots</Text>
+          <Text style={styles.statValue}>{snapshotCount}</Text>
         </View>
 
-        {hasSavedToken ? (
-          <View style={styles.connectedBox}>
-            <View style={styles.connectedHeaderRow}>
-              <Text style={{ fontSize: 20 }}>🚗</Text>
-              <View style={{ marginLeft: 10, flex: 1 }}>
-                <Text style={styles.connectedVehicleName}>
-                  {connectedVehicleName || 'Tesla Model 3'}
-                </Text>
-                {connectedVin ? (
-                  <Text style={styles.connectedVinText}>VIN: {connectedVin}</Text>
-                ) : null}
-              </View>
-            </View>
+        <View style={styles.btnRow}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleSeedData}>
+            <Text style={styles.secondaryBtnText}>⚡ Populate Sample Data</Text>
+          </TouchableOpacity>
 
-            <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusDot}>●</Text>
-              <Text style={styles.syncStatusText}>24/7 Sleep-Safe Fleet Sync Active</Text>
-            </View>
-
-            <TouchableOpacity style={styles.disconnectTeslaBtn} onPress={handleLogoutTesla}>
-              <Text style={styles.disconnectTeslaBtnText}>🔌 Disconnect & Logout Tesla Account</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View>
-            {/* In-app Tesla OAuth Login */}
-            <TouchableOpacity
-              style={styles.teslaLoginBtn}
-              onPress={() => setShowLoginModal(true)}
-            >
-              <Text style={styles.teslaLoginBtnText}>⚡ Sign In with Tesla Account</Text>
-            </TouchableOpacity>
-
-            <View style={styles.orRow}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>OR MANUAL TOKEN PASTE</Text>
-              <View style={styles.orLine} />
-            </View>
-
-            <Text style={styles.inputHelp}>
-              Enter your Tesla Refresh Token manually if you already have one. It will be encrypted locally
-              using hardware SecureStore.
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Paste Tesla Refresh Token..."
-              placeholderTextColor="#64748b"
-              value={tokenInput}
-              onChangeText={setTokenInput}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToken}>
-                <Text style={styles.saveBtnText}>Save Token</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Premium Tier */}
-      <Text style={styles.sectionHeader}>Monetization & License</Text>
-      <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <View>
-            <Text style={styles.label}>Premium Status</Text>
-            <Text style={styles.subText}>
-              {isPremium ? 'Lifetime License Active' : `Free Tier (${priceLabel} one-off upgrade)`}
-            </Text>
-          </View>
-          <View style={[styles.statusBadge, isPremium ? styles.statusLive : styles.statusDemo]}>
-            <Text style={styles.statusBadgeText}>{isPremium ? 'PREMIUM' : 'FREE'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleTextContainer}>
-            <Text style={styles.label}>Developer Mode (Mock Premium)</Text>
-            <Text style={styles.subText}>Quickly toggle premium features without native store billing</Text>
-          </View>
-          <Switch
-            value={isPremium}
-            onValueChange={toggleMockPremium}
-            trackColor={{ false: '#334155', true: '#0284c7' }}
-            thumbColor={isPremium ? '#38bdf8' : '#94a3b8'}
-          />
-        </View>
-      </View>
-
-      {/* Backend Server & Smart Poller */}
-      <Text style={styles.sectionHeader}>Backend Server & Smart Poller</Text>
-      <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <Text style={styles.label}>Server Status</Text>
-          <View style={[styles.statusBadge, serverHealth ? styles.statusLive : styles.statusDemo]}>
-            <Text style={styles.statusBadgeText}>
-              {serverHealth ? `● CONNECTED (${serverHealth.snapshotCount} SNAPSHOTS)` : '○ OFFLINE (LOCAL FALLBACK)'}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.inputHelp}>
-          Configure your VoltIQ backend server URL. When connected, the server uses your Tesla Developer Fleet API credentials, runs the smart post-charge poller, and stores snapshots in a server database.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="http://localhost:3001"
-          placeholderTextColor="#64748b"
-          value={serverUrlInput}
-          onChangeText={setServerUrlInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <TouchableOpacity style={styles.teslaLoginBtn} onPress={handleTestServer}>
-          <Text style={styles.teslaLoginBtnText}>🔌 Test Server Connection</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Database Management */}
-      <Text style={styles.sectionHeader}>Database & Telemetry History</Text>
-      <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <Text style={styles.label}>Recorded Snapshots</Text>
-          <Text style={styles.boldText}>
-            {serverHealth ? `${serverHealth.snapshotCount} server snapshots` : `${snapshotCount} local snapshots`}
-          </Text>
-        </View>
-        <Text style={styles.subText}>
-          {serverHealth
-            ? 'Snapshots are securely stored in your Oracle Cloud SQLite database and synced 24/7.'
-            : 'All telemetry data is saved strictly on-device in SQLite.'}
-        </Text>
-
-        <View style={{ marginTop: 14 }}>
           <TouchableOpacity style={styles.dangerBtn} onPress={handleClearDatabase}>
-            <Text style={styles.dangerBtnText}>🗑️ï¸ Clear All Telemetry Data</Text>
+            <Text style={styles.dangerBtnText}>🗑️ Clear Database</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* App Version Footer */}
-      <FooterVersion />
+      
+      {/* --- VOLTIQ CLOUD SERVER & BACKEND CONNECTION --- */}
+      <Text style={styles.sectionHeader}>VoltIQ Cloud Server Connection</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>Backend Server URL</Text>
+        <Text style={styles.subText}>
+          VoltIQ server managing 24/7 background telemetry sync and central database storage.
+        </Text>
+
+        <View style={styles.serverStatusRow}>
+          <View
+            style={[
+              styles.statusDot,
+              serverHealth ? styles.statusDotConnected : styles.statusDotDisconnected,
+            ]}
+          />
+          <Text style={styles.serverStatusText}>
+            {serverHealth
+              ? `Connected 🟢 (DB: ${serverHealth.snapshotCount} logs, Uptime: ${serverHealth.uptimeSeconds}s)`
+              : 'Server Unreachable / Offline ⚪'}
+          </Text>
+        </View>
+
+        <View style={[styles.customInputBox, { marginTop: 10, marginBottom: 12 }]}>
+          <TextInput
+            style={styles.customTextInput}
+            value={serverUrlInput}
+            onChangeText={setServerUrlInput}
+            placeholder="http://145.241.192.121:3001"
+            placeholderTextColor="#64748b"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.testServerBtn}
+          onPress={handleTestServer}
+        >
+          <Text style={styles.testServerBtnText}>⚡ Test Server Connection</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* --- GARAGE VEHICLE SELECTOR MODAL --- */}
+      <Modal
+        visible={showVehicleModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowVehicleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🚗 Garage Vehicles</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowVehicleModal(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {vehicles.map((v) => {
+                const isCurrent = v.id === activeVehicle.id;
+                return (
+                  <TouchableOpacity
+                    key={v.id}
+                    style={[
+                      styles.vehicleOptionItem,
+                      isCurrent && styles.vehicleOptionItemActive,
+                    ]}
+                    onPress={async () => {
+                      await setActiveVehicleId(v.id);
+                      setShowVehicleModal(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.vehicleItemHeaderRow}>
+                        <Text
+                          style={[
+                            styles.vehicleItemName,
+                            isCurrent && styles.vehicleItemNameActive,
+                          ]}
+                        >
+                          {v.name}
+                        </Text>
+                        <View
+                          style={[
+                            styles.vehicleModeBadge,
+                            v.isPaired ? styles.badgePaired : styles.badgeManual,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.vehicleModeBadgeText,
+                              v.isPaired ? styles.textPaired : styles.textManual,
+                            ]}
+                          >
+                            {v.isPaired ? 'PAIRED' : 'MANUAL'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.vehicleItemSub}>
+                        {v.profile.name} &bull; {v.profile.nominalCapacityKwh} kWh
+                      </Text>
+                    </View>
+                    {isCurrent && <Text style={styles.checkMark}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.addCarBtn}
+                onPress={() => {
+                  setShowVehicleModal(false);
+                  setShowAddCarModal(true);
+                }}
+              >
+                <Text style={styles.addCarBtnText}>+ Add New Vehicle</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- ADD NEW VEHICLE MODAL --- */}
+      <Modal
+        visible={showAddCarModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAddCarModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>+ Add Vehicle to Garage</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowAddCarModal(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              <Text style={styles.tariffFieldLabel}>Vehicle Name / Nickname</Text>
+              <View style={[styles.customInputBox, { marginBottom: 14 }]}>
+                <TextInput
+                  style={styles.customTextInput}
+                  value={newCarName}
+                  onChangeText={setNewCarName}
+                  placeholder="e.g. Family Model Y"
+                  placeholderTextColor="#64748b"
+                />
+              </View>
+
+              <Text style={styles.tariffFieldLabel}>Tesla Model Preset</Text>
+              {TESLA_PROFILES.map((p) => {
+                const isSelected = p.id === newCarProfileId;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.modelOptionItem,
+                      isSelected && styles.modelOptionItemActive,
+                    ]}
+                    onPress={() => setNewCarProfileId(p.id)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modelOptionName, isSelected && styles.modelOptionNameActive]}>
+                        {p.name}
+                      </Text>
+                      <Text style={styles.modelOptionSub}>
+                        {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
+                      </Text>
+                    </View>
+                    {isSelected && <Text style={styles.checkMark}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <View style={[styles.modeToggleRow, { marginTop: 14 }]}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.modeToggleTitle}>
+                    {newCarIsPaired ? 'Tesla Fleet API Mode' : 'Manual Mode (Phone Storage)'}
+                  </Text>
+                  <Text style={styles.modeToggleSub}>
+                    {newCarIsPaired
+                      ? 'Will sync with server and Tesla Fleet API.'
+                      : 'Store logs directly on phone offline.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={newCarIsPaired}
+                  onValueChange={(val) => {
+                    if (val && !isPremium) {
+                      setShowAddCarModal(false);
+                      setShowPaywall(true);
+                      return;
+                    }
+                    setNewCarIsPaired(val);
+                  }}
+                  trackColor={{ false: '#64748b', true: '#0284c7' }}
+                  thumbColor={newCarIsPaired ? '#38bdf8' : '#cbd5e1'}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleCreateNewCar}
+              >
+                <Text style={styles.saveBtnText}>Save Vehicle</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- MODEL PRESET DROPDOWN MODAL --- */}
+      <Modal
+        visible={showModelDropdown}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowModelDropdown(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Tesla Model</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowModelDropdown(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {TESLA_PROFILES.map((p) => {
+                const isSelected = p.id === selectedProfile.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.modelOptionItem,
+                      isSelected && styles.modelOptionItemActive,
+                    ]}
+                    onPress={() => {
+                      selectProfileById(p.id);
+                      setShowModelDropdown(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.modelOptionName,
+                          isSelected && styles.modelOptionNameActive,
+                        ]}
+                      >
+                        {p.name}
+                      </Text>
+                      <Text style={styles.modelOptionSub}>
+                        {p.nominalCapacityKwh} kWh &bull; ~{p.whPerMile} Wh/mi
+                      </Text>
+                    </View>
+                    {isSelected && <Text style={styles.checkMark}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Tesla OAuth Modal */}
       <TeslaLoginModal
@@ -737,11 +1044,110 @@ export const SettingsScreen: React.FC = () => {
         onClose={() => setShowLoginModal(false)}
         onSuccess={checkToken}
       />
+
+      {/* Version footer */}
+      
+      {/* --- PAYWALL UPGRADE MODAL --- */}
+      <Modal visible={showPaywall} transparent animationType="slide" onRequestClose={() => setShowPaywall(false)}>
+        <View style={styles.paywallOverlay}>
+          <View style={styles.paywallModalContent}>
+            <Text style={styles.paywallBadge}>⚡ ONE-OFF LIFETIME UNLOCK</Text>
+            <Text style={styles.paywallTitle}>TrueBattery Premium</Text>
+            <Text style={styles.paywallSubtitle}>
+              One payment of {priceLabel}. No monthly subscriptions.
+            </Text>
+
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.featureText}>Full historical degradation curves & multi-axis trend graphs</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.featureText}>24/7 Tesla Fleet API syncing & cloud database storage</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.featureText}>Unlimited AutoTrader & eBay Resale PDF Certificates</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.featureText}>Multi-car garage with paired & manual vehicles</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.featureText}>100% Zero recurring monthly subscriptions</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.paywallBtn}
+              onPress={async () => {
+                const ok = await unlockLifetimePremium();
+                if (ok) {
+                  setShowPaywall(false);
+                  Alert.alert('Unlocked! 🎉', 'You now have full Lifetime access to Tesla Fleet syncing, historical graphs, and cloud database.');
+                }
+              }}
+            >
+              <Text style={styles.paywallBtnText}>Unlock Lifetime Access ({priceLabel})</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.restoreBtn}
+              onPress={async () => {
+                const res = await restorePurchases();
+                if (res) {
+                  setShowPaywall(false);
+                  Alert.alert('Restored', 'Your lifetime purchase has been restored.');
+                } else {
+                  Alert.alert('Notice', 'No previous purchases found.');
+                }
+              }}
+            >
+              <Text style={styles.restoreBtnText}>Restore Previous Purchase</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.paywallCloseBtn}
+              onPress={() => setShowPaywall(false)}
+            >
+              <Text style={styles.paywallCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <FooterVersion />
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
+  serverStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  serverStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#e2e8f0',
+  },
+  testServerBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  testServerBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#0f172a',
@@ -752,390 +1158,148 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingTop: 8,
   },
   screenTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#f8fafc',
+    color: '#ffffff',
+    letterSpacing: -0.5,
   },
   screenSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#94a3b8',
-    marginTop: 4,
+    marginTop: 2,
   },
   sectionHeader: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#38bdf8',
+    marginTop: 16,
+    marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginTop: 16,
-    marginBottom: 8,
   },
   card: {
     backgroundColor: '#1e293b',
     borderRadius: 16,
     padding: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#334155',
-    marginBottom: 12,
   },
   label: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#ffffff',
   },
   subText: {
     fontSize: 12,
     color: '#94a3b8',
-    marginTop: 2,
+    marginTop: 4,
+    marginBottom: 12,
+    lineHeight: 18,
   },
-  boldText: {
+  vehicleSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+  },
+  vehicleBtnHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  vehicleBtnName: {
     fontSize: 15,
     fontWeight: '700',
+    color: '#ffffff',
+  },
+  vehicleModeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  badgePaired: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+  },
+  badgeManual: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
+  },
+  vehicleModeBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  textPaired: {
     color: '#38bdf8',
   },
-  profileList: {
-    marginTop: 10,
-    gap: 8,
+  textManual: {
+    color: '#f59e0b',
   },
-  profileItem: {
-    padding: 12,
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
+  modeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
   },
-  profileItemSelected: {
-    borderColor: '#38bdf8',
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-  },
-  profileName: {
+  modeToggleTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#e2e8f0',
   },
-  profileNameSelected: {
-    color: '#38bdf8',
-    fontWeight: '700',
-  },
-  profileDetails: {
+  modeToggleSub: {
     fontSize: 11,
     color: '#94a3b8',
     marginTop: 2,
   },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusLive: {
-    backgroundColor: '#065f46',
-  },
-  statusDemo: {
-    backgroundColor: '#334155',
-  },
-  statusBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  teslaLoginBtn: {
-    backgroundColor: '#0284c7',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  teslaLoginBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  orRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 6,
-    gap: 8,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#334155',
-  },
-  orText: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '700',
-  },
-  inputHelp: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginVertical: 10,
-    lineHeight: 16,
-  },
-  input: {
-    backgroundColor: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 10,
-    padding: 12,
-    color: '#ffffff',
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  saveBtn: {
-    backgroundColor: '#334155',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  clearBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  clearBtnText: {
-    color: '#ef4444',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#334155',
-    marginVertical: 14,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  toggleTextContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  secondaryBtn: {
-    backgroundColor: '#334155',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-  },
-  secondaryBtnText: {
-    color: '#e2e8f0',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  dangerBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-  },
-  dangerBtnText: {
-    color: '#ef4444',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  unitToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    padding: 4,
+  deleteVehicleBtn: {
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  unitToggleBtn: {
-    flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  unitToggleBtnActive: {
-    backgroundColor: '#0284c7',
-  },
-  unitToggleText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  unitToggleTextActive: {
-    color: '#ffffff',
-  },
-  tariffRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  tariffCol: {
-    flex: 1,
-  },
-  tariffFieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#f8fafc',
-    marginBottom: 6,
-  },
-  tariffInputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderRadius: 10,
-    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#334155',
-  },
-  tariffInput: {
-    flex: 1,
-    color: '#38bdf8',
-    fontSize: 18,
-    fontWeight: '800',
-    paddingVertical: 8,
-  },
-  tariffUnitText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tariffSubtext: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  currencyToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    gap: 4,
-  },
-  currencyBtn: {
-    flex: 1,
-    paddingVertical: 10,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
     alignItems: 'center',
-    borderRadius: 8,
   },
-  currencyBtnActive: {
-    backgroundColor: '#0284c7',
-  },
-  currencyBtnText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  currencyBtnTextActive: {
-    color: '#ffffff',
-  },
-  connectedBox: {
-    backgroundColor: '#0f172a',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
-    marginTop: 6,
-  },
-  connectedHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  connectedVehicleName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#f8fafc',
-  },
-  connectedVinText: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  syncStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 14,
-  },
-  syncStatusDot: {
-    color: '#10b981',
-    fontSize: 10,
-    marginRight: 6,
-  },
-  syncStatusText: {
-    color: '#10b981',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  disconnectTeslaBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  disconnectTeslaBtnText: {
+  deleteVehicleBtnText: {
     color: '#ef4444',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   dropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#0f172a',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#38bdf8',
-    marginTop: 10,
+    borderColor: '#334155',
   },
   dropdownSelectedText: {
-    color: '#f8fafc',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#ffffff',
   },
   dropdownSubText: {
-    color: '#38bdf8',
-    fontSize: 11,
+    fontSize: 12,
+    color: '#94a3b8',
     marginTop: 2,
   },
   dropdownArrow: {
-    color: '#38bdf8',
     fontSize: 12,
+    color: '#64748b',
     marginLeft: 8,
   },
   packDivider: {
@@ -1146,84 +1310,514 @@ const styles = StyleSheet.create({
   customInputBox: {
     backgroundColor: '#0f172a',
     borderRadius: 10,
-    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#334155',
-    marginTop: 4,
+    paddingHorizontal: 12,
+    marginTop: 6,
   },
   customTextInput: {
-    color: '#f8fafc',
+    height: 44,
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: '600',
+  },
+  unitToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    padding: 4,
+    marginTop: 8,
+  },
+  unitButton: {
+    flex: 1,
     paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  unitButtonActive: {
+    backgroundColor: '#0284c7',
+  },
+  unitButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  unitButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  currencyToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  currencyBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+  },
+  currencyBtnActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+  },
+  currencyBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  currencyBtnTextActive: {
+    color: '#38bdf8',
+    fontWeight: '700',
+  },
+  tariffRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tariffCol: {
+    flex: 1,
+  },
+  tariffFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#cbd5e1',
+    marginBottom: 6,
+  },
+  tariffInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+  },
+  tariffInput: {
+    flex: 1,
+    height: 42,
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tariffUnitText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  tariffSubtext: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  accountHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  accountHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusDotConnected: {
+    backgroundColor: '#10b981',
+  },
+  statusDotDisconnected: {
+    backgroundColor: '#64748b',
+  },
+  accountStatusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  accountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  accountBadgeConnected: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10b981',
+  },
+  accountBadgeDisconnected: {
+    backgroundColor: '#0f172a',
+    borderColor: '#64748b',
+  },
+  accountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  accountBadgeTextConnected: {
+    color: '#10b981',
+  },
+  accountBadgeTextDisconnected: {
+    color: '#94a3b8',
+  },
+  connectedBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  connectedLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  connectedValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 2,
+  },
+  connectedVin: {
+    fontSize: 11,
+    color: '#64748b',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 2,
+  },
+  logoutBtn: {
+    marginTop: 12,
+    backgroundColor: '#334155',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logoutBtnText: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loginBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  loginBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#94a3b8',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  secondaryBtn: {
+    flex: 1,
+    backgroundColor: '#334155',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  secondaryBtnText: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dangerBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    alignItems: 'center',
+  },
+  dangerBtnText: {
+    color: '#ef4444',
+    fontSize: 12,
+    fontWeight: '600',
   },
   modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#1e293b',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    padding: 20,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#334155',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  modalCloseBtn: {
+    padding: 8,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+  },
+  modalCloseText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalList: {
+    marginBottom: 16,
+  },
+  vehicleOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  vehicleOptionItemActive: {
+    borderColor: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+  },
+  vehicleItemHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  vehicleItemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  vehicleItemNameActive: {
+    color: '#38bdf8',
+  },
+  vehicleItemSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  modelOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  modelOptionItemActive: {
+    borderColor: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+  },
+  modelOptionName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  modelOptionNameActive: {
+    color: '#38bdf8',
+  },
+  modelOptionSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  checkMark: {
+    fontSize: 18,
+    color: '#38bdf8',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  modalFooter: {
+    paddingTop: 10,
+  },
+  addCarBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  addCarBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  saveBtn: {
+    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  premiumUnlockCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#0284c7',
+  },
+  premiumUnlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  premiumUnlockIcon: {
+    fontSize: 24,
+  },
+  premiumUnlockTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#38bdf8',
+    marginBottom: 4,
+  },
+  premiumUnlockSub: {
+    fontSize: 12,
+    color: '#94a3b8',
+    lineHeight: 17,
+  },
+  premiumUnlockAction: {
+    marginTop: 12,
+    backgroundColor: '#0284c7',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  premiumUnlockActionText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  paywallOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  dropdownModalContent: {
+  paywallModalContent: {
     width: '100%',
     maxWidth: 420,
     backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 20,
+    padding: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#38bdf8',
+    alignItems: 'center',
   },
-  dropdownModalTitle: {
-    fontSize: 17,
+  paywallBadge: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#f8fafc',
-    marginBottom: 12,
+    color: '#38bdf8',
+    letterSpacing: 1.5,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  dropdownModalItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 6,
-    backgroundColor: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  dropdownModalItemSelected: {
-    borderColor: '#38bdf8',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-  },
-  dropdownItemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#e2e8f0',
-  },
-  dropdownItemNameSelected: {
-    color: '#38bdf8',
-  },
-  dropdownItemSub: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  dropdownCheck: {
-    fontSize: 14,
+  paywallTitle: {
+    fontSize: 22,
     fontWeight: '800',
-    color: '#38bdf8',
-    marginLeft: 8,
+    color: '#ffffff',
+    marginBottom: 4,
+    textAlign: 'center',
   },
-  dropdownCloseBtn: {
-    marginTop: 12,
-    backgroundColor: '#334155',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  dropdownCloseBtnText: {
-    color: '#e2e8f0',
-    fontWeight: '700',
+  paywallSubtitle: {
     fontSize: 13,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 20,
   },
+  featureList: {
+    width: '100%',
+    marginBottom: 24,
+    gap: 12,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  featureCheck: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '800',
+  },
+  featureText: {
+    fontSize: 13,
+    color: '#e2e8f0',
+    flex: 1,
+    lineHeight: 18,
+  },
+  paywallBtn: {
+    width: '100%',
+    backgroundColor: '#0284c7',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  paywallBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  restoreBtn: {
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  restoreBtnText: {
+    color: '#94a3b8',
+    fontSize: 12,
+  },
+  paywallCloseBtn: {
+    paddingVertical: 6,
+  },
+  paywallCloseText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
 });
