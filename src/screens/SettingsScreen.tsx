@@ -20,7 +20,15 @@ import { TESLA_PROFILES, VehicleModelProfile } from '../services/batteryLogic';
 import { usePremium } from '../context/PremiumContext';
 import { clearSnapshots, seedSampleData, getSnapshots } from '../services/db';
 import { TeslaLoginModal } from '../components/TeslaLoginModal';
-import { getServerUrl, setServerUrl, checkServerHealth, clearServerDatabase, ServerHealth } from '../services/apiClient';
+import {
+  getServerUrl,
+  setServerUrl,
+  checkServerHealth,
+  clearServerDatabase,
+  ServerHealth,
+  fetchServerVehicle,
+  disconnectServerTeslaAccount,
+} from '../services/apiClient';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
 import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
@@ -67,6 +75,8 @@ export const SettingsScreen: React.FC = () => {
   const selectedProfileIndex = Math.max(0, TESLA_PROFILES.findIndex((p) => p.id === selectedProfile.id));
   const [tokenInput, setTokenInput] = useState<string>('');
   const [hasSavedToken, setHasSavedToken] = useState<boolean>(false);
+  const [connectedVehicleName, setConnectedVehicleName] = useState<string>('');
+  const [connectedVin, setConnectedVin] = useState<string>('');
   const [snapshotCount, setSnapshotCount] = useState<number>(0);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
 
@@ -79,13 +89,25 @@ export const SettingsScreen: React.FC = () => {
     setServerHealth(health);
 
     const token = await getTeslaRefreshToken();
+    const serverVehicleData = await fetchServerVehicle();
+
+    const serverLinked = !!serverVehicleData?.isAccountLinked;
+    const localLinked = !!token;
+    const isConnected = serverLinked || localLinked;
+
+    setHasSavedToken(isConnected);
+
+    if (serverVehicleData?.vehicle) {
+      setConnectedVehicleName(serverVehicleData.vehicle.display_name || 'Tesla Model 3');
+      setConnectedVin(serverVehicleData.vehicle.vin || '');
+    }
+
     if (token) {
-      setHasSavedToken(true);
       setTokenInput(token);
     } else {
-      setHasSavedToken(false);
       setTokenInput('');
     }
+
     if (health) {
       setSnapshotCount(health.snapshotCount);
     } else {
@@ -134,11 +156,36 @@ export const SettingsScreen: React.FC = () => {
     Alert.alert('Saved', 'Your Tesla refresh token is securely stored in on-device Keychain/KeyStore.');
   };
 
+  const handleLogoutTesla = async () => {
+    const doLogout = async () => {
+      await disconnectServerTeslaAccount();
+      await clearTeslaCredentials();
+      setTokenInput('');
+      setHasSavedToken(false);
+      setConnectedVehicleName('');
+      setConnectedVin('');
+      await checkToken();
+      showAlert('Tesla Account Disconnected', 'Your Tesla account has been unlinked.');
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Disconnect your Tesla account and stop automatic 24/7 background telemetry sync?')) {
+        await doLogout();
+      }
+    } else {
+      Alert.alert(
+        'Disconnect Tesla Account',
+        'Disconnect your Tesla account and stop automatic 24/7 background sync?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Disconnect & Logout', style: 'destructive', onPress: doLogout },
+        ]
+      );
+    }
+  };
+
   const handleClearToken = async () => {
-    await clearTeslaCredentials();
-    setTokenInput('');
-    setHasSavedToken(false);
-    Alert.alert('Cleared', 'Stored credentials have been erased.');
+    await handleLogoutTesla();
   };
 
   const handleClearDatabase = async () => {
@@ -395,58 +442,80 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* BYOK Tesla API Token */}
+      {/* Tesla Account & Credentials */}
       <Text style={styles.sectionHeader}>Tesla Account & Credentials</Text>
       <View style={styles.card}>
         <View style={styles.statusRow}>
-          <Text style={styles.label}>Connection Mode</Text>
+          <Text style={styles.label}>Connection Status</Text>
           <View style={[styles.statusBadge, hasSavedToken ? styles.statusLive : styles.statusDemo]}>
             <Text style={styles.statusBadgeText}>
-              {hasSavedToken ? '● LIVE TESLA BYOK' : '○ NOT CONNECTED'}
+              {hasSavedToken ? '● CONNECTED TO TESLA' : '○ NOT CONNECTED'}
             </Text>
           </View>
         </View>
 
-        {/* In-app Tesla OAuth Login */}
-        <TouchableOpacity
-          style={styles.teslaLoginBtn}
-          onPress={() => setShowLoginModal(true)}
-        >
-          <Text style={styles.teslaLoginBtnText}>⚡ Sign In with Tesla Account</Text>
-        </TouchableOpacity>
+        {hasSavedToken ? (
+          <View style={styles.connectedBox}>
+            <View style={styles.connectedHeaderRow}>
+              <Text style={{ fontSize: 20 }}>🚗</Text>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={styles.connectedVehicleName}>
+                  {connectedVehicleName || 'Tesla Model 3'}
+                </Text>
+                {connectedVin ? (
+                  <Text style={styles.connectedVinText}>VIN: {connectedVin}</Text>
+                ) : null}
+              </View>
+            </View>
 
-        <View style={styles.orRow}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>OR MANUAL TOKEN PASTE</Text>
-          <View style={styles.orLine} />
-        </View>
+            <View style={styles.syncStatusRow}>
+              <Text style={styles.syncStatusDot}>●</Text>
+              <Text style={styles.syncStatusText}>24/7 Sleep-Safe Fleet Sync Active</Text>
+            </View>
 
-        <Text style={styles.inputHelp}>
-          Enter your Tesla Refresh Token manually if you already have one. It will be encrypted locally
-          using hardware SecureStore and never transmitted to third parties.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Paste Tesla Refresh Token..."
-          placeholderTextColor="#64748b"
-          value={tokenInput}
-          onChangeText={setTokenInput}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToken}>
-            <Text style={styles.saveBtnText}>Save Token</Text>
-          </TouchableOpacity>
-          {hasSavedToken && (
-            <TouchableOpacity style={styles.clearBtn} onPress={handleClearToken}>
-              <Text style={styles.clearBtnText}>Disconnect</Text>
+            <TouchableOpacity style={styles.disconnectTeslaBtn} onPress={handleLogoutTesla}>
+              <Text style={styles.disconnectTeslaBtnText}>🔌 Disconnect & Logout Tesla Account</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        ) : (
+          <View>
+            {/* In-app Tesla OAuth Login */}
+            <TouchableOpacity
+              style={styles.teslaLoginBtn}
+              onPress={() => setShowLoginModal(true)}
+            >
+              <Text style={styles.teslaLoginBtnText}>⚡ Sign In with Tesla Account</Text>
+            </TouchableOpacity>
+
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>OR MANUAL TOKEN PASTE</Text>
+              <View style={styles.orLine} />
+            </View>
+
+            <Text style={styles.inputHelp}>
+              Enter your Tesla Refresh Token manually if you already have one. It will be encrypted locally
+              using hardware SecureStore.
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Paste Tesla Refresh Token..."
+              placeholderTextColor="#64748b"
+              value={tokenInput}
+              onChangeText={setTokenInput}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToken}>
+                <Text style={styles.saveBtnText}>Save Token</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Premium Tier */}
@@ -859,6 +928,63 @@ const styles = StyleSheet.create({
   },
   currencyBtnTextActive: {
     color: '#ffffff',
+  },
+  connectedBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    marginTop: 6,
+  },
+  connectedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  connectedVehicleName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#f8fafc',
+  },
+  connectedVinText: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  syncStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 14,
+  },
+  syncStatusDot: {
+    color: '#10b981',
+    fontSize: 10,
+    marginRight: 6,
+  },
+  syncStatusText: {
+    color: '#10b981',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  disconnectTeslaBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disconnectTeslaBtnText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '700',
   },
   versionFooter: {
     marginTop: 20,

@@ -138,3 +138,18 @@ export async function clearServerDatabase(): Promise<{ success: boolean; message
     return { success: false, message: err?.message || 'Could not connect to server.' };
   }
 }
+
+export async function disconnectServerTeslaAccount(): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${activeServerUrl}/api/auth/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      return { success: false, message: 'Server failed to disconnect Tesla account.' };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Could not connect to server.' };
+  }
+}

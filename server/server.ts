@@ -7,7 +7,7 @@ import * as url from 'node:url';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData } from './db';
+import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData, clearTokens } from './db';
 import { TeslaFleetService } from './teslaFleetService';
 import { SmartPoller } from './poller';
 
@@ -201,6 +201,15 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         success: true,
         message: 'All vehicle telemetry and historical snapshots cleared.',
+      });
+    }
+
+    // 3d. Disconnect / Logout Tesla Account Endpoint
+    if ((pathname === '/api/auth/disconnect' || pathname === '/api/auth/logout' || pathname === '/api/token/disconnect') && req.method === 'POST') {
+      clearTokens();
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Disconnected from Tesla account and tokens cleared from server.',
       });
     }
 

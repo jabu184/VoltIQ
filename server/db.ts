@@ -154,6 +154,11 @@ export function getTokens(): TokenRecord | null {
   return row || null;
 }
 
+export function clearTokens(): void {
+  const db = getDb();
+  db.prepare('DELETE FROM tokens').run();
+}
+
 export function clearAllData(): void {
   const db = getDb();
   db.prepare('DELETE FROM battery_snapshots').run();
