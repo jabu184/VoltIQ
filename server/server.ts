@@ -168,14 +168,34 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // 3b. Save Tesla Token from Mobile App
+    // 3b. Save Tesla Token or Exchange Code from Mobile App
     if ((pathname === '/api/token' || pathname === '/api/auth/token') && req.method === 'POST') {
       const body = await parseJsonBody(req);
+      const code = body.code;
       const refreshToken = body.refreshToken || body.refresh_token || body.token;
       const accessToken = body.accessToken || body.access_token || '';
 
+      if (code) {
+        try {
+          const result = await fleetService.exchangeCodeForTokens(code);
+          const syncResult = await poller.forceSync();
+          return sendJson(res, 200, {
+            success: true,
+            access_token: result.accessToken,
+            refresh_token: result.refreshToken,
+            message: 'Authorization code successfully exchanged with Tesla.',
+            syncResult,
+          });
+        } catch (err: any) {
+          console.error('Tesla code exchange failed:', err);
+          return sendJson(res, 400, {
+            error: err.message || 'Failed to exchange authorization code with Tesla.',
+          });
+        }
+      }
+
       if (!refreshToken) {
-        return sendJson(res, 400, { error: 'Missing refresh token.' });
+        return sendJson(res, 400, { error: 'Missing refresh token or authorization code.' });
       }
 
       saveTokens({
@@ -190,6 +210,8 @@ const server = http.createServer(async (req, res) => {
 
       return sendJson(res, 200, {
         success: true,
+        access_token: accessToken,
+        refresh_token: refreshToken,
         message: 'Token saved and initial vehicle sync triggered.',
         syncResult,
       });

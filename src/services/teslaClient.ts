@@ -160,10 +160,11 @@ export function extractCodeFromCallbackUrl(url: string): string | null {
 
 export async function exchangeAuthCodeForTokens(
   code: string,
-  codeVerifier: string,
+  codeVerifier?: string,
   clientId: string = DEFAULT_CLIENT_ID,
   clientSecret: string = '',
-  redirectUri: string = DEFAULT_REDIRECT_URI
+  redirectUri: string = DEFAULT_REDIRECT_URI,
+  vehicleId?: string
 ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
   const serverUrl = getServerUrl();
   const res = await fetch(`${serverUrl}/api/auth/token`, {
@@ -179,14 +180,20 @@ export async function exchangeAuthCodeForTokens(
   });
 
   if (!res.ok) {
-    throw new Error(`Token exchange failed with status ${res.status}`);
+    const errText = await res.text();
+    throw new Error(`Token exchange failed (${res.status}): ${errText}`);
   }
 
   const data = await res.json();
+  const refreshToken = data.refresh_token || data.refreshToken;
+  const accessToken = data.access_token || data.accessToken || '';
+  if (refreshToken) {
+    await saveTeslaRefreshToken(refreshToken, vehicleId);
+  }
   return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresIn: data.expires_in,
+    accessToken,
+    refreshToken,
+    expiresIn: data.expires_in || 28800,
   };
 }
 

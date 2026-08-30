@@ -92,50 +92,42 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
     }
   };
 
-  const handleVerifyServerLink = async () => {
+  const handleVerifyAndConnect = async () => {
     setOauthLoading(true);
     try {
+      // 1. If user pasted a callback URL or code, exchange it immediately with Tesla
+      if (callbackInput.trim()) {
+        const raw = callbackInput.trim();
+        const code = extractCodeFromCallbackUrl(raw) || raw;
+        if (code) {
+          const res = await exchangeAuthCodeForTokens(code, codeVerifier);
+          if (res.refreshToken) {
+            await saveTeslaRefreshToken(res.refreshToken);
+          }
+          Alert.alert('Connected! 🎉', 'Your Tesla vehicle is now linked and active 24/7!');
+          onSuccess();
+          onClose();
+          return;
+        }
+      }
+
+      // 2. Otherwise check if server already received the webhook
       const serverData = await fetchServerVehicle();
       if (serverData && serverData.isAccountLinked) {
-        Alert.alert('Connected! 🎉', `Successfully verified connection for ${serverData.vehicle?.display_name || 'Tesla Model 3'}!`);
+        Alert.alert('Connected! 🎉', `Successfully linked ${serverData.vehicle?.display_name || 'Tesla Model 3'}!`);
         onSuccess();
         onClose();
       } else {
-        Alert.alert('Not Detected Yet', 'Server has not received the callback yet. Please complete sign-in in your browser or paste the callback code below.');
+        Alert.alert(
+          'Paste Callback URL',
+          'Please sign in on Tesla.com, then paste the callback URL or code from your browser address bar into the box.'
+        );
       }
-    } catch {
-      Alert.alert('Check Error', 'Could not check server link status.');
-    } finally {
-      setOauthLoading(false);
-    }
-  };
-
-  const handleCompleteOAuth = async () => {
-    if (!callbackInput.trim()) {
-      Alert.alert(
-        'Missing Callback URL',
-        'Please paste the URL from your browser after logging in on Tesla.com.'
-      );
-      return;
-    }
-
-    setOauthLoading(true);
-    try {
-      const code = extractCodeFromCallbackUrl(callbackInput) || callbackInput.trim();
-      if (!code) {
-        throw new Error('No authorization code found in the pasted URL.');
-      }
-
-      // Perform the direct token exchange entirely on-device
-      await exchangeAuthCodeForTokens(code, codeVerifier);
-      Alert.alert('Connected! 🎉', 'Your phone successfully retrieved and saved your Tesla token!');
-      onSuccess();
-      onClose();
     } catch (err: any) {
-      console.warn('OAuth exchange error:', err);
+      console.warn('OAuth verification error:', err);
       Alert.alert(
-        'Authentication Error',
-        err.message || 'Token exchange with Tesla failed. Please try again.'
+        'Connection Error',
+        err.message || 'Could not verify Tesla link. Please make sure the pasted URL is valid.'
       );
     } finally {
       setOauthLoading(false);
@@ -302,25 +294,17 @@ export const TeslaLoginModal: React.FC<TeslaLoginModalProps> = ({
                 </View>
 
                 {/* Step 3 */}
-                <View style={{ gap: 10, marginTop: 6 }}>
+                <View style={{ marginTop: 12 }}>
                   <TouchableOpacity
                     style={styles.actionBtn}
-                    onPress={handleVerifyServerLink}
+                    onPress={handleVerifyAndConnect}
                     disabled={oauthLoading}
                   >
                     {oauthLoading ? (
                       <ActivityIndicator color="#ffffff" />
                     ) : (
-                      <Text style={styles.actionBtnText}>✓ Verify & Link Account</Text>
+                      <Text style={styles.actionBtnText}>⚡ Verify & Link Tesla Account</Text>
                     )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#334155' }]}
-                    onPress={handleCompleteOAuth}
-                    disabled={oauthLoading}
-                  >
-                    <Text style={styles.actionBtnText}>⚡ Manual Exchange from Pasted Code</Text>
                   </TouchableOpacity>
                 </View>
               </View>
