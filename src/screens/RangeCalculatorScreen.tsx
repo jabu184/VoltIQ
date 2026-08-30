@@ -16,6 +16,7 @@ import { useTariff } from '../context/TariffContext';
 import { getSnapshots } from '../services/db';
 import { RangeSlider } from '../components/RangeSlider';
 import { FooterVersion } from '../components/FooterVersion';
+import { HeaderStatusBadges } from '../components/HeaderStatusBadges';
 
 export const RangeCalculatorScreen: React.FC = () => {
   const { selectedProfile } = useVehicleProfile();
@@ -180,7 +181,7 @@ export const RangeCalculatorScreen: React.FC = () => {
         <View style={styles.contextHeaderRow}>
           <Text style={styles.contextCarName}>{carName}</Text>
           <View style={styles.liveTag}>
-            <Text style={styles.liveTagText}>● LATEST TELEMETRY</Text>
+            <Text style={styles.liveTagText}>â— LATEST TELEMETRY</Text>
           </View>
         </View>
         <View style={styles.contextStatsRow}>
@@ -290,10 +291,10 @@ export const RangeCalculatorScreen: React.FC = () => {
           >
             <Text style={styles.statusBannerText}>
               {isOver100
-                ? `⚠️ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
+                ? `âš ï¸ This trip (${displayEffective} ${unitLabel}) exceeds your vehicle's 100% full range of ${fullMaxRangeDisplay} ${unitLabel}. You will need to stop and Supercharge along the route.`
                 : hasEnough
-                ? `✓ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
-                : `🔌 Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
+                ? `âœ“ Ready to Depart! Your current charge (${currentSocInt}%) is plenty for this trip with a +${socDiff}% safety buffer.`
+                : `ðŸ”Œ Charging Recommended: You need ${pctNeeded}%, but currently have ${currentSocInt}%. Please charge +${missingSoc}% before departing.`}
             </Text>
           </View>
         )}
@@ -339,7 +340,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Home AC Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>🔌</Text>
+                  <Text style={styles.columnIcon}>ðŸ”Œ</Text>
                   <View>
                     <Text style={styles.columnName}>Home AC</Text>
                     <Text style={styles.columnSub}>{homePowerKw} kW ({homeRate}{currencySubUnit}/kWh)</Text>
@@ -360,7 +361,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Supercharger Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>⚡</Text>
+                  <Text style={styles.columnIcon}>âš¡</Text>
                   <View>
                     <Text style={styles.columnName}>Supercharger</Text>
                     <Text style={styles.columnSub}>{superchargerPowerKw} kW ({superchargerRate}{currencySubUnit}/kWh)</Text>
@@ -391,7 +392,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Home AC Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>🔌</Text>
+                  <Text style={styles.columnIcon}>ðŸ”Œ</Text>
                   <View>
                     <Text style={styles.columnName}>Home AC</Text>
                     <Text style={styles.columnSub}>{homePowerKw} kW ({homeRate}{currencySubUnit}/kWh)</Text>
@@ -412,7 +413,7 @@ export const RangeCalculatorScreen: React.FC = () => {
               {/* Supercharger Column */}
               <View style={styles.columnCard}>
                 <View style={styles.columnHeader}>
-                  <Text style={styles.columnIcon}>⚡</Text>
+                  <Text style={styles.columnIcon}>âš¡</Text>
                   <View>
                     <Text style={styles.columnName}>Supercharger</Text>
                     <Text style={styles.columnSub}>{superchargerPowerKw} kW ({superchargerRate}{currencySubUnit}/kWh)</Text>

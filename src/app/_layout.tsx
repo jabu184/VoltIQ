@@ -33,7 +33,6 @@ export default function RootLayout() {
           headerTintColor: '#ffffff',
           headerTitleAlign: 'center',
           headerTitle: () => <VoltIQLogo size="sm" showSubtitle={false} />,
-          headerRight: () => <HeaderStatusBadges />,
           tabBarStyle: {
             backgroundColor: '#0f172a',
             borderTopColor: '#1e293b',

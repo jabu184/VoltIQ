@@ -53,7 +53,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginRight: 12,
   },
   badge: {
     paddingHorizontal: 8,

@@ -40,6 +40,7 @@ import { VoltIQLogo } from '../components/VoltIQLogo';
 import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
 import { FooterVersion } from '../components/FooterVersion';
+import { HeaderStatusBadges } from '../components/HeaderStatusBadges';
 
 export const DashboardScreen: React.FC = () => {
   const { selectedProfile } = useVehicleProfile();
@@ -180,7 +181,7 @@ export const DashboardScreen: React.FC = () => {
     if (serverOnline) {
       const res = await triggerServerSync();
       showAlert(
-        res.success ? 'Vehicle Link Connected! ⚡' : 'Tesla Fleet API Response',
+        res.success ? 'Vehicle Link Connected! âš¡' : 'Tesla Fleet API Response',
         res.message
       );
     } else {
@@ -262,7 +263,7 @@ export const DashboardScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.loginBannerBtn}>
-            <Text style={styles.loginBannerBtnText}>Connect ⚡</Text>
+            <Text style={styles.loginBannerBtnText}>Connect âš¡</Text>
           </View>
         </TouchableOpacity>
       )}
@@ -332,11 +333,11 @@ export const DashboardScreen: React.FC = () => {
             ]}
           >
             {typeof telemetry?.insideTempC === 'number'
-              ? `${Number.isInteger(telemetry.insideTempC) ? telemetry.insideTempC : telemetry.insideTempC.toFixed(1)}°C`
+              ? `${Number.isInteger(telemetry.insideTempC) ? telemetry.insideTempC : telemetry.insideTempC.toFixed(1)}Â°C`
               : '--'}
             <Text style={[styles.tempDividerText, !isCarOnline && styles.textOfflineMuted]}> / </Text>
             {typeof telemetry?.outsideTempC === 'number'
-              ? `${Number.isInteger(telemetry.outsideTempC) ? telemetry.outsideTempC : telemetry.outsideTempC.toFixed(1)}°C`
+              ? `${Number.isInteger(telemetry.outsideTempC) ? telemetry.outsideTempC : telemetry.outsideTempC.toFixed(1)}Â°C`
               : '--'}
           </Text>
           <Text style={[styles.cardSub, !isCarOnline && styles.cardSubOffline]}>
@@ -362,7 +363,7 @@ export const DashboardScreen: React.FC = () => {
                 : styles.textOfflineMuted,
             ]}
           >
-            {(telemetry?.isLocked ?? true) ? '🔒 Locked' : '🔓 Unlocked'}
+            {(telemetry?.isLocked ?? true) ? 'ðŸ”’ Locked' : 'ðŸ”“ Unlocked'}
           </Text>
           <Text style={[styles.cardSub, !isCarOnline && styles.cardSubOffline]}>
             {isCarOnline
@@ -378,7 +379,7 @@ export const DashboardScreen: React.FC = () => {
           style={styles.quickEntryButton}
           onPress={() => setShowLoginModal(true)}
         >
-          <Text style={styles.quickEntryButtonText}>📝 Log Current Car Reading (SoC & Range)</Text>
+          <Text style={styles.quickEntryButtonText}>ðŸ“ Log Current Car Reading (SoC & Range)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -389,7 +390,7 @@ export const DashboardScreen: React.FC = () => {
           {refreshing ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.syncButtonText}>🔄 Sync Telemetry & Log Snapshot</Text>
+            <Text style={styles.syncButtonText}>ðŸ”„ Sync Telemetry & Log Snapshot</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -434,7 +435,7 @@ export const DashboardScreen: React.FC = () => {
 
         <Text style={styles.statusFooterHint}>
           {isCarOnline
-            ? '✓ Live two-way connection established with the vehicle.'
+            ? 'âœ“ Live two-way connection established with the vehicle.'
             : 'Tesla enters low-power deep sleep to conserve battery. Telemetry reflects the last recorded snapshot.'}
         </Text>
       </View>
