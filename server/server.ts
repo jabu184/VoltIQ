@@ -7,7 +7,7 @@ import * as url from 'node:url';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { getDb, getAllSnapshots, getVehicle, upsertVehicle, insertSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens } from './db';
+import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData } from './db';
 import { TeslaFleetService } from './teslaFleetService';
 import { SmartPoller } from './poller';
 
@@ -44,8 +44,8 @@ function sendJson(res: http.ServerResponse, statusCode: number, data: any): void
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': '*',
   });
   res.end(JSON.stringify(data));
 }
@@ -69,8 +69,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
     });
     res.end();
     return;
@@ -126,7 +126,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 1. Health check
-    if (pathname === '/api/health' && req.method === 'GET') {
+    if ((pathname === '/api/health' || pathname === '/health') && req.method === 'GET') {
       return sendJson(res, 200, {
         status: 'ok',
         version: '1.0.0',
@@ -166,6 +166,42 @@ const server = http.createServer(async (req, res) => {
         </html>
       `);
       return;
+    }
+
+    // 3b. Save Tesla Token from Mobile App
+    if ((pathname === '/api/token' || pathname === '/api/auth/token') && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const refreshToken = body.refreshToken || body.refresh_token || body.token;
+      const accessToken = body.accessToken || body.access_token || '';
+
+      if (!refreshToken) {
+        return sendJson(res, 400, { error: 'Missing refresh token.' });
+      }
+
+      saveTokens({
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        expiresIn: 28800,
+        clientId: process.env.TESLA_CLIENT_ID,
+      });
+
+      // Trigger an immediate initial vehicle sync
+      const syncResult = await poller.forceSync();
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Token saved and initial vehicle sync triggered.',
+        syncResult,
+      });
+    }
+
+    // 3c. Clear Database Endpoint
+    if ((pathname === '/api/db/clear' || pathname === '/api/clear') && req.method === 'POST') {
+      clearAllData();
+      return sendJson(res, 200, {
+        success: true,
+        message: 'All vehicle telemetry and historical snapshots cleared.',
+      });
     }
 
     // 4. Vehicle status and latest telemetry (with zero-wake live status check)

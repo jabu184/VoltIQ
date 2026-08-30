@@ -154,9 +154,38 @@ export function getTokens(): TokenRecord | null {
   return row || null;
 }
 
+export function clearAllData(): void {
+  const db = getDb();
+  db.prepare('DELETE FROM battery_snapshots').run();
+  db.prepare('DELETE FROM vehicles').run();
+}
+
+export function clearSnapshots(vin?: string): void {
+  const db = getDb();
+  if (vin) {
+    db.prepare('DELETE FROM battery_snapshots WHERE vin = ?').run(vin);
+  } else {
+    db.prepare('DELETE FROM battery_snapshots').run();
+  }
+}
+
+export function purgeOtherVins(activeVin: string): void {
+  const db = getDb();
+  db.prepare('DELETE FROM battery_snapshots WHERE vin != ?').run(activeVin);
+  db.prepare('DELETE FROM vehicles WHERE vin != ?').run(activeVin);
+}
+
 export function upsertVehicle(vehicle: Partial<VehicleRecord> & { vin: string }): void {
   const db = getDb();
   const now = Date.now();
+
+  // If a new vehicle VIN is connected, automatically purge old/sample vehicle data
+  if (vehicle.vin) {
+    const otherVehicles = db.prepare('SELECT vin FROM vehicles WHERE vin != ?').all(vehicle.vin) as { vin: string }[];
+    if (otherVehicles.length > 0) {
+      purgeOtherVins(vehicle.vin);
+    }
+  }
 
   db.prepare(`
     INSERT INTO vehicles (vin, display_name, model, last_state, last_soc, last_rated_range, last_odometer, last_charging_state, inside_temp, outside_temp, is_locked, updated_at)
@@ -241,10 +270,11 @@ export function insertSnapshot(snapshot: ServerSnapshot): number {
 
 export function getAllSnapshots(vin?: string, limit: number = 5000): ServerSnapshot[] {
   const db = getDb();
-  if (vin) {
+  const targetVin = vin || getVehicle()?.vin;
+  if (targetVin) {
     return db
       .prepare('SELECT * FROM battery_snapshots WHERE vin = ? ORDER BY odometer_miles ASC LIMIT ?')
-      .all(vin, limit) as unknown as ServerSnapshot[];
+      .all(targetVin, limit) as unknown as ServerSnapshot[];
   }
   return db
     .prepare('SELECT * FROM battery_snapshots ORDER BY odometer_miles ASC LIMIT ?')
@@ -253,6 +283,11 @@ export function getAllSnapshots(vin?: string, limit: number = 5000): ServerSnaps
 
 export function getSnapshotCount(): number {
   const db = getDb();
+  const activeVin = getVehicle()?.vin;
+  if (activeVin) {
+    const row = db.prepare('SELECT COUNT(*) as count FROM battery_snapshots WHERE vin = ?').get(activeVin) as { count: number };
+    return row?.count || 0;
+  }
   const row = db.prepare('SELECT COUNT(*) as count FROM battery_snapshots').get() as { count: number };
   return row?.count || 0;
 }

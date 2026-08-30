@@ -66,20 +66,29 @@ export const BatteryHealthScreen: React.FC = () => {
             outsideTempC: 15,
             timestamp: Date.now(),
           });
+
+          const liveReading = {
+            ratedRangeMiles: realRange,
+            batteryLevelPct: realSoc,
+            odometerMiles: realOdo,
+          };
+          const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
+          setMetrics(evaluated);
+        } else {
+          const evaluated = evaluateBatteryHealth(snaps, selectedProfile);
+          setMetrics(evaluated);
         }
       } else {
         snaps = await getSnapshots(2000);
         const tel = await fetchVehicleTelemetry(false, selectedProfile.nominalCapacityKwh);
         setVehicle(tel);
+        const liveReading = tel
+          ? { ratedRangeMiles: tel.ratedRangeMiles, batteryLevelPct: tel.batteryLevelPct, odometerMiles: tel.odometerMiles }
+          : undefined;
+        const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
+        setMetrics(evaluated);
       }
       setSnapshots(snaps);
-
-      const liveReading = vehicle
-        ? { ratedRangeMiles: vehicle.ratedRangeMiles, batteryLevelPct: vehicle.batteryLevelPct }
-        : undefined;
-
-      const evaluated = evaluateBatteryHealth(snaps, selectedProfile, liveReading);
-      setMetrics(evaluated);
     } catch (err) {
       console.warn('Error loading health data:', err);
     } finally {
@@ -231,7 +240,7 @@ export const BatteryHealthScreen: React.FC = () => {
             <Text style={styles.statSub}>Charge cycles through battery lifespan</Text>
           </View>
           <Text style={styles.statValue}>
-            {metrics?.chargeCycles ?? 18.3} cyc
+            {metrics?.chargeCycles !== undefined ? `${metrics.chargeCycles} cyc` : '--'}
           </Text>
         </View>
 
@@ -243,7 +252,7 @@ export const BatteryHealthScreen: React.FC = () => {
             <Text style={styles.statSub}>Cumulative kilowatt-hours used</Text>
           </View>
           <Text style={styles.statValue}>
-            {metrics?.totalEnergyUsedKwh ? `${metrics.totalEnergyUsedKwh.toLocaleString()} kWh` : '1,145 kWh'}
+            {metrics?.totalEnergyUsedKwh ? `${metrics.totalEnergyUsedKwh.toLocaleString()} kWh` : '--'}
           </Text>
         </View>
       </View>

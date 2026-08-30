@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 15.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://harper-condition-matching-dept.trycloudflare.com"
+        "EXPO_PUBLIC_API_URL": "http://145.241.192.121:3001"
       }
     },
     "production": {
@@ -22,7 +22,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://harper-condition-matching-dept.trycloudflare.com"
+        "EXPO_PUBLIC_API_URL": "http://145.241.192.121:3001"
       }
     }
   },

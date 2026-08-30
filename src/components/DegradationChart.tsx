@@ -22,8 +22,15 @@ export const DegradationChart: React.FC<DegradationChartProps> = ({
 
   if (snapshots.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No battery snapshots logged yet.</Text>
+      <View style={styles.container}>
+        <Text style={styles.chartTitle}>Battery Degradation Curve</Text>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>📈</Text>
+          <Text style={styles.emptyText}>No Historical Snapshots Logged</Text>
+          <Text style={styles.emptySub}>
+            Snapshots are automatically recorded after each charge cycle or when you manually sync.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -552,6 +559,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
   },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginBottom: 4,
+  },
   emptyContainer: {
     padding: 32,
     alignItems: 'center',
@@ -559,8 +572,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginVertical: 12,
   },
+  emptyIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
   emptyText: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  emptySub: {
     color: '#64748b',
-    fontSize: 14,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });

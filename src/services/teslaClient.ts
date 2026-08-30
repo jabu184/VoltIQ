@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { getServerUrl } from './apiClient';
 
 const isWeb = typeof window !== 'undefined';
 
@@ -65,8 +66,24 @@ async function secureDelete(key: string): Promise<void> {
   }
 }
 
-export async function saveTeslaRefreshToken(token: string): Promise<void> {
-  await secureSave(SECURE_STORE_KEY_REFRESH_TOKEN, token.trim());
+export async function saveTeslaRefreshToken(token: string, accessToken?: string): Promise<void> {
+  const cleanToken = token.trim();
+  await secureSave(SECURE_STORE_KEY_REFRESH_TOKEN, cleanToken);
+
+  // Sync token to VoltIQ Backend Server so smart poller and server API are updated
+  try {
+    const serverUrl = getServerUrl();
+    await fetch(`${serverUrl}/api/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refreshToken: cleanToken,
+        accessToken: accessToken || '',
+      }),
+    });
+  } catch (err) {
+    console.warn('Failed to sync token to backend server:', err);
+  }
 }
 
 export async function getTeslaRefreshToken(): Promise<string | null> {
@@ -115,7 +132,7 @@ export async function exchangeAuthCodeForTokens(
 
   const data = await response.json();
   if (data.refresh_token && data.access_token) {
-    await saveTeslaRefreshToken(data.refresh_token);
+    await saveTeslaRefreshToken(data.refresh_token, data.access_token);
     await secureSave(SECURE_STORE_KEY_ACCESS_TOKEN, data.access_token);
     return {
       accessToken: data.access_token,

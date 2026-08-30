@@ -9,6 +9,7 @@ import {
   Alert,
   Switch,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import {
   getTeslaRefreshToken,
@@ -19,7 +20,7 @@ import { TESLA_PROFILES, VehicleModelProfile } from '../services/batteryLogic';
 import { usePremium } from '../context/PremiumContext';
 import { clearSnapshots, seedSampleData, getSnapshots } from '../services/db';
 import { TeslaLoginModal } from '../components/TeslaLoginModal';
-import { getServerUrl, setServerUrl, checkServerHealth, ServerHealth } from '../services/apiClient';
+import { getServerUrl, setServerUrl, checkServerHealth, clearServerDatabase, ServerHealth } from '../services/apiClient';
 import { useVehicleProfile } from '../context/VehicleProfileContext';
 import { useUnit } from '../context/UnitContext';
 import { useTariff } from '../context/TariffContext';
@@ -85,8 +86,20 @@ export const SettingsScreen: React.FC = () => {
       setHasSavedToken(false);
       setTokenInput('');
     }
-    const snaps = await getSnapshots(500);
-    setSnapshotCount(snaps.length);
+    if (health) {
+      setSnapshotCount(health.snapshotCount);
+    } else {
+      const snaps = await getSnapshots(500);
+      setSnapshotCount(snaps.length);
+    }
+  };
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
   };
 
   const handleTestServer = async () => {
@@ -94,14 +107,15 @@ export const SettingsScreen: React.FC = () => {
     const health = await checkServerHealth();
     setServerHealth(health);
     if (health) {
-      Alert.alert(
+      setSnapshotCount(health.snapshotCount);
+      showAlert(
         'Server Connected! 🟢',
         `VoltIQ Backend is active.\nUptime: ${health.uptimeSeconds}s\nSnapshots in Server DB: ${health.snapshotCount}\nSmart Poller: Active`
       );
     } else {
-      Alert.alert(
+      showAlert(
         'Server Unreachable ⚪',
-        `Could not connect to ${serverUrlInput}. Ensure 'npm run server' is running on your machine.`
+        `Could not connect to ${serverUrlInput}. Ensure backend is running.`
       );
     }
   };
@@ -128,18 +142,29 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleClearDatabase = async () => {
-    Alert.alert('Confirm Reset', 'Clear all local battery snapshots from SQLite?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Erase All',
-        style: 'destructive',
-        onPress: async () => {
-          await clearSnapshots();
-          setSnapshotCount(0);
-          Alert.alert('Cleared', 'Database cleared.');
+    const doClear = async () => {
+      await clearSnapshots();
+      await clearServerDatabase();
+      setSnapshotCount(0);
+      const health = await checkServerHealth();
+      setServerHealth(health);
+      showAlert('Database Cleared 🗑️', 'All local and server battery snapshots have been deleted.');
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Clear all battery snapshots and historical records from database?')) {
+        await doClear();
+      }
+    } else {
+      Alert.alert('Confirm Clear Database', 'Clear all battery snapshots from both your phone and the server database?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Erase All Data',
+          style: 'destructive',
+          onPress: doClear,
         },
-      },
-    ]);
+      ]);
+    }
   };
 
   const handleSeedData = async () => {
@@ -486,21 +511,27 @@ export const SettingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Local SQLite Database */}
-      <Text style={styles.sectionHeader}>Local Storage (`tesla_battery.db`)</Text>
+      {/* Database Management */}
+      <Text style={styles.sectionHeader}>Database & Telemetry History</Text>
       <View style={styles.card}>
         <View style={styles.statusRow}>
           <Text style={styles.label}>Recorded Snapshots</Text>
-          <Text style={styles.boldText}>{snapshotCount} snapshots</Text>
+          <Text style={styles.boldText}>
+            {serverHealth ? `${serverHealth.snapshotCount} server snapshots` : `${snapshotCount} local snapshots`}
+          </Text>
         </View>
-        <Text style={styles.subText}>All telemetry data is saved strictly on-device in SQLite.</Text>
+        <Text style={styles.subText}>
+          {serverHealth
+            ? 'Snapshots are securely stored in your Oracle Cloud SQLite database and synced 24/7.'
+            : 'All telemetry data is saved strictly on-device in SQLite.'}
+        </Text>
 
         <View style={[styles.buttonRow, { marginTop: 14 }]}>
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleSeedData}>
-            <Text style={styles.secondaryBtnText}>Seed 6M Sample History</Text>
+            <Text style={styles.secondaryBtnText}>Seed Sample History</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dangerBtn} onPress={handleClearDatabase}>
-            <Text style={styles.dangerBtnText}>Clear DB</Text>
+            <Text style={styles.dangerBtnText}>🗑️ Clear All Data</Text>
           </TouchableOpacity>
         </View>
       </View>

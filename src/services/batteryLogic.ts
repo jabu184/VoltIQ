@@ -153,12 +153,12 @@ export function evaluateBatteryHealth(
     else slowCount++;
   }
   const totalCharges = fastCount + slowCount;
-  const dcRatioPct = totalCharges > 0 ? Math.round((fastCount / totalCharges) * 100) : 15;
-  const acRatioPct = 100 - dcRatioPct;
+  const dcRatioPct = totalCharges > 0 ? Math.round((fastCount / totalCharges) * 100) : 0;
+  const acRatioPct = totalCharges > 0 ? 100 - dcRatioPct : 100;
 
-  const latestOdo = (latestLiveReading as any)?.odometerMiles || (snapshots.length > 0 ? (snapshots[snapshots.length - 1] as any).odometer_miles || 4771 : 4771);
-  const totalEnergyUsedKwh = Math.round((latestOdo * (profile.whPerMile * 1.08)) / 1000);
-  const chargeCycles = Math.round((totalEnergyUsedKwh / profile.nominalCapacityKwh) * 10) / 10;
+  const latestOdo = (latestLiveReading as any)?.odometerMiles || (snapshots.length > 0 ? (snapshots[snapshots.length - 1] as any).odometer_miles || 0 : 0);
+  const totalEnergyUsedKwh = latestOdo > 0 ? Math.round((latestOdo * (profile.whPerMile * 1.08)) / 1000) : 0;
+  const chargeCycles = totalEnergyUsedKwh > 0 ? Math.round((totalEnergyUsedKwh / profile.nominalCapacityKwh) * 10) / 10 : 0;
 
   return {
     nominalCapacityKwh: profile.nominalCapacityKwh,

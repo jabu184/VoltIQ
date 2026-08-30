@@ -1,0 +1,14 @@
+:80 {
+    handle /api/* {
+        reverse_proxy localhost:3001
+    }
+    handle /.well-known/* {
+        reverse_proxy localhost:3001
+    }
+    handle {
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        root * /var/www/voltiq
+        try_files {path} /index.html
+        file_server
+    }
+}

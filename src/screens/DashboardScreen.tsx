@@ -51,7 +51,6 @@ export const DashboardScreen: React.FC = () => {
   const [serverOnline, setServerOnline] = useState<boolean>(false);
   const [serverSnapshotCount, setServerSnapshotCount] = useState<number>(0);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const loadData = useCallback(async (isSilent: boolean = false) => {
     if (!isSilent) {
@@ -116,12 +115,9 @@ export const DashboardScreen: React.FC = () => {
 
         const evaluated = evaluateBatteryHealth(serverSnaps, selectedProfile, liveReading);
         setMetrics(evaluated);
-        setStatusMessage(`Connected to Server DB (${serverSnaps.length} snapshots)`);
-        setTimeout(() => setStatusMessage(null), 3500);
       } else {
         // Fallback to local SQLite mode
         setServerOnline(false);
-        await seedSampleData(selectedProfile.nominalCapacityKwh);
         const token = await getTeslaRefreshToken();
         setHasToken(!!token);
 
@@ -161,10 +157,10 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     loadData(false);
 
-    // Heartbeat liveness polling: silently checks sleep-safe vehicle connection every 15s while app is open
+    // Heartbeat liveness polling: silently checks sleep-safe vehicle connection every 60s while app is open
     const heartbeatTimer = setInterval(() => {
       loadData(true);
-    }, 15000);
+    }, 60000);
 
     return () => clearInterval(heartbeatTimer);
   }, [loadData]);
@@ -185,8 +181,6 @@ export const DashboardScreen: React.FC = () => {
         res.success ? 'Vehicle Link Connected! ⚡' : 'Tesla Fleet API Response',
         res.message
       );
-      setStatusMessage(res.message);
-      setTimeout(() => setStatusMessage(null), 5000);
     } else {
       showAlert('Server Offline', 'Backend server is unreachable. Running in local SQLite mode.');
     }
@@ -258,12 +252,7 @@ export const DashboardScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Auto-Save Toast Notification */}
-      {statusMessage && (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>✓ {statusMessage}</Text>
-        </View>
-      )}
+
 
       {/* Smart Poller Status Pill */}
       {serverOnline && (
@@ -371,9 +360,13 @@ export const DashboardScreen: React.FC = () => {
               !isCarOnline && styles.textOfflineMuted,
             ]}
           >
-            {telemetry?.insideTempC ? `${Math.round(telemetry.insideTempC)}°C` : '--'}
+            {typeof telemetry?.insideTempC === 'number'
+              ? `${Number.isInteger(telemetry.insideTempC) ? telemetry.insideTempC : telemetry.insideTempC.toFixed(1)}°C`
+              : '--'}
             <Text style={[styles.tempDividerText, !isCarOnline && styles.textOfflineMuted]}> / </Text>
-            {telemetry?.outsideTempC ? `${Math.round(telemetry.outsideTempC)}°C` : '--'}
+            {typeof telemetry?.outsideTempC === 'number'
+              ? `${Number.isInteger(telemetry.outsideTempC) ? telemetry.outsideTempC : telemetry.outsideTempC.toFixed(1)}°C`
+              : '--'}
           </Text>
           <Text style={[styles.cardSub, !isCarOnline && styles.cardSubOffline]}>
             {isCarOnline ? 'Cabin / Exterior' : 'Cabin / Exterior (Cached)'}

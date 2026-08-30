@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { BatterySnapshot } from './db';
 
-const CLOUD_TUNNEL_BACKEND = 'https://harper-condition-matching-dept.trycloudflare.com';
+const CLOUD_TUNNEL_BACKEND = 'http://145.241.192.121:3001';
 
 function getDefaultServerUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -121,5 +121,20 @@ export async function getServerAuthUrl(): Promise<string | null> {
     return data.authUrl || null;
   } catch {
     return null;
+  }
+}
+
+export async function clearServerDatabase(): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${activeServerUrl}/api/db/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      return { success: false, message: 'Server failed to clear database.' };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Could not connect to server.' };
   }
 }

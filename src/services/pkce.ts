@@ -1,5 +1,5 @@
 export const DEFAULT_TESLA_CLIENT_ID = '2dd7a3b6-3daa-4975-8234-1109615d4deb';
-export const DEFAULT_TESLA_REDIRECT_URI = 'http://localhost:3001/api/auth/callback';
+export const DEFAULT_TESLA_REDIRECT_URI = 'https://medfizz.com/api/auth/callback';
 
 /**
  * Generates a random alphanumeric code verifier for PKCE (RFC 7636)
