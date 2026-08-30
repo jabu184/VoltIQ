@@ -194,7 +194,13 @@ export async function deleteSnapshot(id: number, vehicleId?: string): Promise<bo
 export async function clearSnapshots(vehicleId?: string): Promise<void> {
   if (Platform.OS === 'web') {
     if (vehicleId) {
-      const remaining = getWebSnapshots().filter((s) => s.vehicle_id && s.vehicle_id !== vehicleId);
+      const isDefault = vehicleId === 'veh_default' || vehicleId === 'default_car';
+      const remaining = getWebSnapshots().filter((s) => {
+        if (isDefault) {
+          return s.vehicle_id && s.vehicle_id !== 'veh_default' && s.vehicle_id !== 'default_car';
+        }
+        return s.vehicle_id !== vehicleId;
+      });
       saveWebSnapshots(remaining);
     } else {
       saveWebSnapshots([]);
@@ -206,7 +212,12 @@ export async function clearSnapshots(vehicleId?: string): Promise<void> {
   if (!db) return;
 
   if (vehicleId) {
-    await db.runAsync('DELETE FROM battery_snapshots WHERE vehicle_id = ?', vehicleId);
+    const isDefault = vehicleId === 'veh_default' || vehicleId === 'default_car';
+    if (isDefault) {
+      await db.runAsync("DELETE FROM battery_snapshots WHERE vehicle_id = 'veh_default' OR vehicle_id = 'default_car' OR vehicle_id IS NULL");
+    } else {
+      await db.runAsync('DELETE FROM battery_snapshots WHERE vehicle_id = ?', vehicleId);
+    }
   } else {
     await db.runAsync('DELETE FROM battery_snapshots');
   }

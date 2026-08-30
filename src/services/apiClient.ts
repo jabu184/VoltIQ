@@ -7,6 +7,12 @@ function getDefaultServerUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      return origin;
+    }
+  }
   return CLOUD_BACKEND_URL;
 }
 

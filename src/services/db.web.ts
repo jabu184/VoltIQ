@@ -13,6 +13,15 @@ export interface BatterySnapshot {
 
 const WEB_STORAGE_KEY = 'voltiq_web_battery_snapshots';
 
+export function isSameVehicleId(snapshotVid?: string, targetVid?: string): boolean {
+  if (!targetVid) return true;
+  const isDefaultTarget = targetVid === 'veh_default' || targetVid === 'default_car';
+  if (isDefaultTarget) {
+    return !snapshotVid || snapshotVid === 'veh_default' || snapshotVid === 'default_car';
+  }
+  return snapshotVid === targetVid;
+}
+
 function getWebSnapshots(): BatterySnapshot[] {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -40,7 +49,7 @@ export async function initDatabase(): Promise<void> {
 }
 
 export async function insertSnapshot(snapshot: Omit<BatterySnapshot, 'id'>, vehicleId?: string): Promise<number> {
-  const vId = vehicleId || snapshot.vehicle_id || 'default_car';
+  const vId = vehicleId || snapshot.vehicle_id || 'veh_default';
   const current = getWebSnapshots();
   const newId = current.length > 0 ? Math.max(...current.map((s) => Number(s.id) || 0)) + 1 : 1;
   const newSnap: BatterySnapshot = { ...snapshot, vehicle_id: vId, id: newId };
@@ -52,13 +61,7 @@ export async function insertSnapshot(snapshot: Omit<BatterySnapshot, 'id'>, vehi
 export async function getSnapshots(limit: number = 100, vehicleId?: string): Promise<BatterySnapshot[]> {
   let list = getWebSnapshots();
   if (vehicleId) {
-    list = list.filter(
-      (s) =>
-        s.vehicle_id === vehicleId ||
-        (!s.vehicle_id && (vehicleId === 'veh_default' || vehicleId === 'default_car')) ||
-        (s.vehicle_id === 'default_car' && vehicleId === 'veh_default') ||
-        (s.vehicle_id === 'veh_default' && vehicleId === 'default_car')
-    );
+    list = list.filter((s) => isSameVehicleId(s.vehicle_id, vehicleId));
   }
   return list.slice(0, limit);
 }
@@ -70,7 +73,7 @@ export async function getLatestSnapshot(vehicleId?: string): Promise<BatterySnap
 
 export async function updateSnapshot(id: number, updates: Partial<BatterySnapshot>, vehicleId?: string): Promise<boolean> {
   const list = getWebSnapshots();
-  const index = list.findIndex((s) => Number(s.id) === Number(id));
+  const index = list.findIndex((s) => Number(s.id) === Number(id) && isSameVehicleId(s.vehicle_id, vehicleId));
   if (index === -1) return false;
   list[index] = { ...list[index], ...updates };
   saveWebSnapshots(list);
@@ -79,14 +82,14 @@ export async function updateSnapshot(id: number, updates: Partial<BatterySnapsho
 
 export async function deleteSnapshot(id: number, vehicleId?: string): Promise<boolean> {
   const list = getWebSnapshots();
-  const filtered = list.filter((s) => Number(s.id) !== Number(id));
+  const filtered = list.filter((s) => !(Number(s.id) === Number(id) && isSameVehicleId(s.vehicle_id, vehicleId)));
   saveWebSnapshots(filtered);
   return filtered.length < list.length;
 }
 
 export async function clearSnapshots(vehicleId?: string): Promise<void> {
   if (vehicleId) {
-    const remaining = getWebSnapshots().filter((s) => s.vehicle_id && s.vehicle_id !== vehicleId);
+    const remaining = getWebSnapshots().filter((s) => !isSameVehicleId(s.vehicle_id, vehicleId));
     saveWebSnapshots(remaining);
   } else {
     saveWebSnapshots([]);
@@ -94,7 +97,7 @@ export async function clearSnapshots(vehicleId?: string): Promise<void> {
 }
 
 export async function seedSampleData(nominalCapacityKwh: number = 60.0, vehicleId?: string): Promise<void> {
-  const vId = vehicleId || 'default_car';
+  const vId = vehicleId || 'veh_default';
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
   const sampleData: BatterySnapshot[] = [];
@@ -122,6 +125,6 @@ export async function seedSampleData(nominalCapacityKwh: number = 60.0, vehicleI
     });
   }
 
-  const existing = getWebSnapshots().filter((s) => s.vehicle_id !== vId);
+  const existing = getWebSnapshots().filter((s) => !isSameVehicleId(s.vehicle_id, vId));
   saveWebSnapshots([...sampleData, ...existing]);
 }

@@ -136,13 +136,7 @@ export const SettingsScreen: React.FC = () => {
     setServerHealth(health);
 
     if (isManualMode || !activeVehicle.isPaired) {
-      let snaps = await getSnapshots(2000, activeVehicle.id);
-      if (snaps.length === 0 && isPremium && health) {
-        const sSnaps = await fetchServerSnapshots(5000);
-        if (sSnaps.length > 0) {
-          snaps = sSnaps;
-        }
-      }
+      const snaps = await getSnapshots(2000, activeVehicle.id);
       setSnapshotCount(snaps.length);
       setHasSavedToken(false);
       setTokenInput('');
