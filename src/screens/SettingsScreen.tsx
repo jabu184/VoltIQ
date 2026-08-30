@@ -535,7 +535,7 @@ export const SettingsScreen: React.FC = () => {
 
       {/* App Version Footer */}
       <View style={styles.versionFooter}>
-        <Text style={styles.versionText}>⚡ VoltIQ v1.0.4 • Build 7b914b4</Text>
+        <Text style={styles.versionText}>⚡ VoltIQ v1.0.5 • OTA Live Update</Text>
         <Text style={styles.versionSubText}>Tesla Battery Intelligence • Oracle Cloud Engine</Text>
       </View>
 

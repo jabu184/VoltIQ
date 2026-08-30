@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 
-export const APP_VERSION = 'v1.0.4';
-export const APP_BUILD = 'Build 7b914b4';
+export const APP_VERSION = 'v1.0.5';
+export const APP_BUILD = 'OTA Wireless #2';
 
 interface VoltIQLogoProps {
   size?: 'sm' | 'md' | 'lg';
