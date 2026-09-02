@@ -1,5 +1,61 @@
 import { TeslaFleetService, TelemetryReading } from './teslaFleetService';
-import { getVehicle, upsertVehicle, insertSnapshot } from './db';
+import { getVehicle, upsertVehicle, insertSnapshot, getAllSnapshots, ServerSnapshot, VehicleRecord } from './db';
+
+/**
+ * Intelligent rules for when to log a permanent battery health snapshot:
+ * 1. Initial connection (first time seeing car)
+ * 2. Post-charge completion (after charging finishes or unplugged)
+ * 3. Significant SoC jump while resting (>= 5% increase)
+ * 4. Daily Baseline Health Assessment (Once a day / >= 20 hours since last snapshot)
+ * 5. Mileage Milestone (>= 30 miles driven since last snapshot and >= 4 hours)
+ */
+export function shouldLogSnapshot(
+  telemetry: TelemetryReading,
+  existingVehicle: VehicleRecord | null,
+  latestSnapshot: ServerSnapshot | null
+): { shouldLog: boolean; reason: string } {
+  const prevChargingState = existingVehicle?.last_charging_state || 'Disconnected';
+  const prevSoc = existingVehicle?.last_soc ?? telemetry.batteryLevelPct;
+  const currChargingState = telemetry.chargingState;
+  const currSoc = telemetry.batteryLevelPct;
+  const now = Date.now();
+
+  // Rule 0: First time seeing this vehicle (no snapshots exist)
+  if (!latestSnapshot) {
+    return { shouldLog: true, reason: 'initial_sync' };
+  }
+
+  // Rule 1: A charge session just completed or unplugged after charging
+  const wasCharging = prevChargingState.toLowerCase() === 'charging';
+  const isNowFinishedCharging =
+    currChargingState.toLowerCase() === 'complete' ||
+    currChargingState.toLowerCase() === 'disconnected' ||
+    currChargingState.toLowerCase() === 'stopped';
+
+  if (wasCharging && isNowFinishedCharging) {
+    return { shouldLog: true, reason: 'charge_complete' };
+  }
+
+  // Rule 2: SoC increased significantly while resting (offline charge completed)
+  if (currSoc >= prevSoc + 5 && currChargingState.toLowerCase() !== 'charging') {
+    return { shouldLog: true, reason: 'soc_increase_charge_detected' };
+  }
+
+  // Rule 3: Daily Battery Health Assessment (Once a day / >= 20 hours elapsed since last snapshot)
+  // Best BMS assessment occurs when car is resting or parked once a day
+  const hoursSinceLastSnapshot = (now - latestSnapshot.timestamp) / (1000 * 60 * 60);
+  if (hoursSinceLastSnapshot >= 20) {
+    return { shouldLog: true, reason: 'daily_health_check' };
+  }
+
+  // Rule 4: Significant Mileage Milestone (>= 30 miles driven since last snapshot and >= 4 hours)
+  const milesSinceLastSnapshot = Math.abs(telemetry.odometerMiles - (latestSnapshot.odometer_miles || 0));
+  if (milesSinceLastSnapshot >= 30 && hoursSinceLastSnapshot >= 4) {
+    return { shouldLog: true, reason: 'mileage_interval' };
+  }
+
+  return { shouldLog: false, reason: '' };
+}
 
 export class SmartPoller {
   private service: TeslaFleetService;
@@ -40,7 +96,8 @@ export class SmartPoller {
    * Main smart polling logic:
    * 1. Never wakes up sleeping cars.
    * 2. Detects completion of charging sessions.
-   * 3. Logs a snapshot only when SoC changes or charge finishes.
+   * 3. Logs a daily baseline health snapshot once every 24h.
+   * 4. Logs a snapshot upon charge completion or significant mileage.
    */
   public async pollVehicle(): Promise<{
     status: 'asleep' | 'skipped' | 'snapshot_logged' | 'error';
@@ -79,47 +136,18 @@ export class SmartPoller {
       }
 
       const existingVehicle = getVehicle(status.vin);
-      const prevChargingState = existingVehicle?.last_charging_state || 'Disconnected';
-      const prevSoc = existingVehicle?.last_soc ?? telemetry.batteryLevelPct;
-      const currChargingState = telemetry.chargingState;
-      const currSoc = telemetry.batteryLevelPct;
-
-      let shouldLogSnapshot = false;
-      let reason = '';
-
-      // Detection Rule 1: A charge session just finished
-      // (Car was charging and now switched to Complete, Disconnected, or Stopped)
-      const wasCharging = prevChargingState.toLowerCase() === 'charging';
-      const isNowFinishedCharging =
-        currChargingState.toLowerCase() === 'complete' ||
-        currChargingState.toLowerCase() === 'disconnected' ||
-        currChargingState.toLowerCase() === 'stopped';
-
-      if (wasCharging && isNowFinishedCharging) {
-        shouldLogSnapshot = true;
-        reason = 'charge_complete';
-        console.log(
-          `[SmartPoller] ⚡ Charge Finished! Transitioned from ${prevChargingState} to ${currChargingState}. Logging clean battery health snapshot.`
-        );
-      }
-      // Detection Rule 2: SoC increased significantly while resting (offline charge completed)
-      else if (currSoc >= prevSoc + 5 && currChargingState.toLowerCase() !== 'charging') {
-        shouldLogSnapshot = true;
-        reason = 'soc_increase_charge_detected';
-        console.log(
-          `[SmartPoller] ⚡ SoC increased from ${prevSoc}% to ${currSoc}%. Post-charge snapshot triggered.`
-        );
-      }
+      const latestSnapshot = getAllSnapshots(status.vin, 1)[0] || null;
+      const evalResult = shouldLogSnapshot(telemetry, existingVehicle, latestSnapshot);
 
       // Update vehicle tracking in DB
       upsertVehicle({
         vin: status.vin,
         display_name: status.displayName,
         last_state: 'online',
-        last_soc: currSoc,
+        last_soc: telemetry.batteryLevelPct,
         last_rated_range: telemetry.ratedRangeMiles,
         last_odometer: telemetry.odometerMiles,
-        last_charging_state: currChargingState,
+        last_charging_state: telemetry.chargingState,
         inside_temp: telemetry.insideTempC,
         outside_temp: telemetry.outsideTempC,
         is_locked: telemetry.isLocked !== undefined ? (telemetry.isLocked ? 1 : 0) : 1,
@@ -127,7 +155,7 @@ export class SmartPoller {
         last_polled_at: Date.now(),
       });
 
-      if (shouldLogSnapshot) {
+      if (evalResult.shouldLog) {
         insertSnapshot({
           vin: status.vin,
           timestamp: telemetry.timestamp,
@@ -138,22 +166,26 @@ export class SmartPoller {
           degradation_pct: telemetry.degradationPct,
           is_fast_charging: telemetry.isFastCharging ? 1 : 0,
           charger_power_kw: telemetry.chargerPowerKw,
-          trigger_reason: reason,
+          trigger_reason: evalResult.reason,
         });
+
+        console.log(
+          `[SmartPoller] 📊 Logged battery health snapshot for ${status.vin} (Reason: ${evalResult.reason}, SoC: ${telemetry.batteryLevelPct}%, Range: ${telemetry.ratedRangeMiles}mi).`
+        );
 
         return {
           status: 'snapshot_logged',
-          message: `Snapshot logged successfully (${reason}).`,
+          message: `Snapshot logged successfully (${evalResult.reason}).`,
           reading: telemetry,
         };
       }
 
       console.log(
-        `[SmartPoller] Vehicle online (SoC: ${currSoc}%, State: ${currChargingState}). No post-charge event; API queries conserved.`
+        `[SmartPoller] Vehicle online (SoC: ${telemetry.batteryLevelPct}%, State: ${telemetry.chargingState}). Next daily snapshot scheduled in due course.`
       );
       return {
         status: 'skipped',
-        message: 'No charging event or SoC change. Snapshot skipped to minimize API calls.',
+        message: 'Telemetry updated. Snapshot skipped until daily check, charge event, or mileage milestone.',
         reading: telemetry,
       };
     } catch (err: any) {

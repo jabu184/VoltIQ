@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { getDb, getAllSnapshots, getVehicle, upsertVehicle, saveTokens, insertSnapshot, updateSnapshot, deleteSnapshot, seedSampleSnapshotsIfEmpty, getSnapshotCount, getTokens, clearAllData, clearTokens } from './db';
 import { TeslaFleetService } from './teslaFleetService';
-import { SmartPoller } from './poller';
+import { SmartPoller, shouldLogSnapshot } from './poller';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
@@ -254,6 +254,10 @@ const server = http.createServer(async (req, res) => {
                 221.9
               );
               if (reading) {
+                const prevVeh = getVehicle(status.vin);
+                const latestSnap = getAllSnapshots(status.vin, 1)[0] || null;
+                const evalRes = shouldLogSnapshot(reading, prevVeh, latestSnap);
+
                 upsertVehicle({
                   vin: status.vin,
                   display_name: status.displayName,
@@ -268,6 +272,22 @@ const server = http.createServer(async (req, res) => {
                   data_updated_at: reading.timestamp,
                   last_polled_at: Date.now(),
                 });
+
+                if (evalRes.shouldLog) {
+                  insertSnapshot({
+                    vin: status.vin,
+                    timestamp: reading.timestamp,
+                    odometer_miles: reading.odometerMiles,
+                    battery_level_pct: reading.batteryLevelPct,
+                    rated_range_miles: reading.ratedRangeMiles,
+                    calculated_capacity_kwh: reading.calculatedCapacityKwh,
+                    degradation_pct: reading.degradationPct,
+                    is_fast_charging: reading.isFastCharging ? 1 : 0,
+                    charger_power_kw: reading.chargerPowerKw,
+                    trigger_reason: evalRes.reason,
+                  });
+                  console.log(`[Server] 📊 Logged snapshot for ${status.vin} on live check (${evalRes.reason}).`);
+                }
               }
             } else {
               upsertVehicle({
@@ -297,7 +317,8 @@ const server = http.createServer(async (req, res) => {
     // 5. Retrieve all historical snapshots (for Scatter Plot & Certificate)
     if (pathname === '/api/snapshots' && req.method === 'GET') {
       const limit = parsedUrl.query.limit ? parseInt(parsedUrl.query.limit as string, 10) : 5000;
-      const snapshots = getAllSnapshots(undefined, limit);
+      const vin = parsedUrl.query.vin as string | undefined;
+      const snapshots = getAllSnapshots(vin, limit);
       return sendJson(res, 200, {
         count: snapshots.length,
         snapshots,

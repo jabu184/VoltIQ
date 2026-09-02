@@ -117,7 +117,7 @@ export const DashboardScreen: React.FC = () => {
           setServerSnapshotCount(serverHealth.snapshotCount);
 
           const serverData = await fetchServerVehicle();
-          const serverSnaps = await fetchServerSnapshots(2000);
+          const serverSnaps = await fetchServerSnapshots(2000, activeVehicle.vin || activeVehicle.id);
           setSnapshots(serverSnaps);
 
           if (serverData) {

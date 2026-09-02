@@ -90,11 +90,14 @@ export async function fetchServerVehicle(): Promise<ServerVehicleResponse | null
   }
 }
 
-export async function fetchServerSnapshots(limit: number = 5000): Promise<BatterySnapshot[]> {
+export async function fetchServerSnapshots(limit: number = 5000, vin?: string): Promise<BatterySnapshot[]> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${activeServerUrl}/api/snapshots?limit=${limit}`, {
+    const url = vin
+      ? `${activeServerUrl}/api/snapshots?limit=${limit}&vin=${encodeURIComponent(vin)}`
+      : `${activeServerUrl}/api/snapshots?limit=${limit}`;
+    const res = await fetch(url, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     });

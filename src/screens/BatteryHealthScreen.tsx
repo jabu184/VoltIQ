@@ -66,7 +66,7 @@ export const BatteryHealthScreen: React.FC = () => {
         const serverHealth = await checkServerHealth();
         let snaps: BatterySnapshot[] = [];
         if (serverHealth) {
-          snaps = await fetchServerSnapshots(5000);
+          snaps = await fetchServerSnapshots(5000, activeVehicle.vin || activeVehicle.id);
           const serverVeh = await fetchServerVehicle();
           if (serverVeh && serverVeh.vehicle) {
             const veh = serverVeh.vehicle;
