@@ -317,7 +317,8 @@ const server = http.createServer(async (req, res) => {
     // 5. Retrieve all historical snapshots (for Scatter Plot & Certificate)
     if (pathname === '/api/snapshots' && req.method === 'GET') {
       const limit = parsedUrl.query.limit ? parseInt(parsedUrl.query.limit as string, 10) : 5000;
-      const vin = parsedUrl.query.vin as string | undefined;
+      const rawVin = parsedUrl.query.vin as string | undefined;
+      const vin = rawVin && rawVin !== 'undefined' && rawVin !== 'null' && rawVin !== 'veh_default' && rawVin !== 'default_car' ? rawVin : undefined;
       const snapshots = getAllSnapshots(vin, limit);
       return sendJson(res, 200, {
         count: snapshots.length,

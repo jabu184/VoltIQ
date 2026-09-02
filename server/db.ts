@@ -160,7 +160,7 @@ export function getAllSnapshots(vin?: string, limit: number = 5000): ServerSnaps
   const db = getDb();
   let query = 'SELECT * FROM battery_snapshots';
   const params: any[] = [];
-  if (vin) {
+  if (vin && vin !== 'undefined' && vin !== 'null' && vin !== 'veh_default' && vin !== 'default_car') {
     query += ' WHERE vin = ?';
     params.push(vin);
   }
