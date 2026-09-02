@@ -160,11 +160,12 @@ export async function triggerServerSync(): Promise<{ success: boolean; message: 
   }
 }
 
-export async function clearServerDatabase(): Promise<boolean> {
+export async function clearServerDatabase(vin?: string): Promise<boolean> {
   try {
-    const res = await fetch(`${activeServerUrl}/api/snapshots/clear`, {
+    const res = await fetch(`${activeServerUrl}/api/db/clear`, {
       method: 'POST',
-      headers: { Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ vin }),
     });
     return res.ok;
   } catch {

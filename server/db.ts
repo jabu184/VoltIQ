@@ -288,10 +288,22 @@ export function clearTokens(): void {
   db.exec('DELETE FROM tokens');
 }
 
-export function clearAllData(): void {
+export function clearAllData(vin?: string): void {
   const db = getDb();
-  db.exec('DELETE FROM battery_snapshots');
-  db.exec('DELETE FROM vehicles');
+  if (vin && vin !== 'undefined' && vin !== 'null') {
+    const isDefault = vin === 'veh_default' || vin === 'default_car';
+    if (isDefault) {
+      db.exec("DELETE FROM battery_snapshots WHERE vin = 'veh_default' OR vin = 'default_car' OR vin IS NULL");
+    } else {
+      const stmt1 = db.prepare('DELETE FROM battery_snapshots WHERE vin = ?');
+      stmt1.run(vin);
+      const stmt2 = db.prepare('DELETE FROM vehicles WHERE vin = ?');
+      stmt2.run(vin);
+    }
+  } else {
+    db.exec('DELETE FROM battery_snapshots');
+    db.exec('DELETE FROM vehicles');
+  }
 }
 
 export function seedSampleSnapshotsIfEmpty(vin: string = '5YJ3E1EB8LF892301', nominalCapacityKwh: number = 75.0): void {

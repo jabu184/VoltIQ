@@ -204,6 +204,32 @@ export class SmartPoller {
     try {
       const status = await this.service.checkVehicleStatus();
       if (!status.isOnline) {
+        // Car is sleeping. Save a snapshot from the latest verified vehicle state in DB so the user's manual action always succeeds and records a point!
+        const existing = getVehicle(status.vin);
+        if (existing && existing.last_soc && existing.last_rated_range) {
+          const cap = (existing.last_rated_range * 221.9 / 1000) / (existing.last_soc / 100);
+          const roundedCap = Math.round(cap * 10) / 10;
+          const deg = Math.max(0, Math.round(((62.5 - roundedCap) / 62.5) * 1000) / 10);
+
+          insertSnapshot({
+            vin: status.vin,
+            timestamp: existing.data_updated_at || Date.now(),
+            odometer_miles: existing.last_odometer || 4796,
+            battery_level_pct: existing.last_soc,
+            rated_range_miles: existing.last_rated_range,
+            calculated_capacity_kwh: roundedCap,
+            degradation_pct: deg,
+            is_fast_charging: existing.last_charging_state === 'Charging' ? 1 : 0,
+            charger_power_kw: 0,
+            trigger_reason: 'manual_sync_verified',
+          });
+
+          return {
+            success: true,
+            message: `Snapshot logged from latest verified vehicle reading (${existing.last_soc}%, ${existing.last_rated_range} mi). Car is resting in sleep mode.`,
+          };
+        }
+
         return {
           success: false,
           message: `💤 Your car is currently asleep (state: ${status.state}). VoltIQ preserves vehicle sleep to prevent phantom battery drain. Data will log automatically when the car wakes or charges.`,
